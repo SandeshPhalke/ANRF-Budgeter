@@ -351,8 +351,16 @@ const TABS_BY_ROLE = {
 };
 
 async function loadRoleAndInit() {
-  const { data, error } = await sb.from("profiles").select("role").eq("id", currentUser.id).single();
-  currentRole = (!error && data && data.role) ? data.role : "participant";
+  let { data } = await sb.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
+
+  if (!data) {
+    const { data: created } = await sb.from("profiles")
+      .upsert({ id: currentUser.id, email: currentUser.email, full_name: currentUser.user_metadata?.full_name || null }, { onConflict: "id" })
+      .select("role").maybeSingle();
+    data = created;
+  }
+
+  currentRole = (data && data.role) ? data.role : "participant";
 
   const badge = document.getElementById("user-role-badge");
   badge.textContent = currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
