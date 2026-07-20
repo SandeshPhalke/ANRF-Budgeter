@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Futures of Design — Workshop Budget & Logistics Tracker</title>
+<title>Futures of Design — Workshop Hub</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -13,11 +13,7 @@
   };
 </script>
 <style>
-  :root{
-    --navy:#1e3a5f;
-    --navy-dark:#152a45;
-    --gold:#c08a2e;
-  }
+  :root{ --navy:#1e3a5f; --navy-dark:#152a45; --gold:#c08a2e; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
   .tab-btn { color:#64748b; transition: color .15s ease, border-color .15s ease; }
   .tab-btn.active { border-bottom: 3px solid var(--navy); color: var(--navy); font-weight: 600; }
@@ -26,23 +22,23 @@
   table.data-tbl th { background: var(--navy); color: white; text-align: left; position: sticky; top: 0; font-weight: 600; letter-spacing:.02em; }
   table.data-tbl tr:nth-child(even) { background: #f5f7fa; }
   table.data-tbl tr:hover { background: #eef2f7; }
+  table.data-tbl tfoot td { background:#eef2f7; font-weight:700; border-top:2px solid var(--navy); }
   .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
   .badge-pending { background: #fef3c7; color: #92400e; }
   .badge-paid { background: #d1fae5; color: #065f46; }
   .badge-reimbursed { background: #dbeafe; color: #1e40af; }
-  .badge-ordered { background: #e0e7ff; color: #3730a3; }
-  .badge-delivered { background: #d1fae5; color: #065f46; }
+  .badge-admin { background:#fde68a; color:#92400e; }
+  .badge-speaker { background:#ddd6fe; color:#5b21b6; }
+  .badge-participant { background:#dbeafe; color:#1e40af; }
   .scrollx { overflow-x: auto; }
-  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; transition: border-color .15s ease, box-shadow .15s ease; background:#fff; }
+  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; background:#fff; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,58,95,0.12); }
-  ::placeholder { color:#94a3b8; }
   .auth-toggle-btn { color:#64748b; transition: color .15s ease; }
   .auth-toggle-btn.active { color: var(--navy); font-weight:700; }
   .btn-primary { background: var(--navy); }
   .btn-primary:hover { background: var(--navy-dark); }
-  .skeleton { background: linear-gradient(90deg,#eef1f5 25%,#f7f9fb 37%,#eef1f5 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
-  @keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:0 0} }
-  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+  .star { cursor:pointer; font-size:20px; color:#cbd5e1; }
+  .star.filled { color:#f59e0b; }
 </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
@@ -54,12 +50,11 @@
     <div class="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold" style="background:var(--navy)">FD</div>
     <div>
       <h1 class="text-base font-bold text-slate-800 leading-tight">Futures of Design</h1>
-      <p class="text-[11px] text-slate-500">Budget & Logistics Tracker</p>
+      <p class="text-[11px] text-slate-500">Workshop Hub</p>
     </div>
   </div>
   <p class="text-[11px] text-slate-400 mb-6">ANRF Workshop &middot; 07–11 Sept 2026 &middot; IIIT Dharwad</p>
 
-  <!-- Toggle -->
   <div class="flex gap-4 border-b border-slate-200 mb-5 text-sm">
     <button id="show-login-btn" class="auth-toggle-btn active pb-2">Sign In</button>
     <button id="show-signup-btn" class="auth-toggle-btn pb-2">Create Account</button>
@@ -68,69 +63,54 @@
   <div id="auth-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3"></div>
   <div id="auth-success" class="hidden text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-3"></div>
 
-  <!-- Sign In form -->
   <form id="login-form" class="space-y-3">
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
-      <input type="email" id="login-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" />
-    </div>
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
-      <input type="password" id="login-password" required class="w-full" placeholder="••••••••" autocomplete="current-password" />
-    </div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
+      <input type="email" id="login-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" /></div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
+      <input type="password" id="login-password" required class="w-full" placeholder="••••••••" autocomplete="current-password" /></div>
     <button type="submit" id="login-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Sign In</button>
   </form>
 
-  <!-- Create Account form -->
   <form id="signup-form" class="space-y-3 hidden">
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Full name</label>
-      <input type="text" id="signup-name" required class="w-full" placeholder="e.g. Sandesh Phalke" autocomplete="name" />
-    </div>
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
-      <input type="email" id="signup-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" />
-    </div>
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
-      <input type="password" id="signup-password" required minlength="6" class="w-full" placeholder="At least 6 characters" autocomplete="new-password" />
-    </div>
-    <div>
-      <label class="text-xs font-medium text-slate-600 block mb-1">Confirm password</label>
-      <input type="password" id="signup-password2" required minlength="6" class="w-full" placeholder="Re-enter password" autocomplete="new-password" />
-    </div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Full name</label>
+      <input type="text" id="signup-name" required class="w-full" placeholder="e.g. Sandesh Phalke" autocomplete="name" /></div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
+      <input type="email" id="signup-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" /></div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
+      <input type="password" id="signup-password" required minlength="6" class="w-full" placeholder="At least 6 characters" autocomplete="new-password" /></div>
+    <div><label class="text-xs font-medium text-slate-600 block mb-1">Confirm password</label>
+      <input type="password" id="signup-password2" required minlength="6" class="w-full" placeholder="Re-enter password" autocomplete="new-password" /></div>
+    <p class="text-[11px] text-slate-400">New accounts start as <strong>Participant</strong>. The Convener can upgrade you to Speaker or Admin.</p>
     <button type="submit" id="signup-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Create Account</button>
   </form>
 
-  <p id="config-warning" class="hidden text-[11px] text-red-500 mt-4 border-t pt-3">⚠ config.js still has placeholder values — edit config.js with your Supabase Project URL and anon key before this will work.</p>
+  <p id="config-warning" class="hidden text-[11px] text-red-500 mt-4 border-t pt-3"></p>
 </div>
 </div>
 
 <!-- ==================== APP VIEW ==================== -->
 <div id="app-view" class="hidden min-h-screen">
-<header class="bg-slate-800 text-white sticky top-0 z-20 shadow" style="background:var(--navy)">
+<header class="text-white sticky top-0 z-20 shadow" style="background:var(--navy)">
 <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
 <div>
-<h1 class="font-bold text-sm leading-tight">Futures of Design — Budget & Logistics Tracker</h1>
-<p class="text-[11px] text-slate-300">ANRF Sanction SSY/2026/000495 &nbsp;|&nbsp; 07–11 September 2026 &nbsp;|&nbsp; IIIT Dharwad</p>
+<h1 class="font-bold text-sm leading-tight">Futures of Design — Workshop Hub</h1>
+<p class="text-[11px] text-slate-300">07–11 September 2026 &nbsp;|&nbsp; IIIT Dharwad</p>
 </div>
 <div class="flex items-center gap-3 text-xs">
 <span id="user-email" class="text-slate-300"></span>
+<span id="user-role-badge" class="badge"></span>
 <button id="logout-btn" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors">Sign Out</button>
 </div>
 </div>
-<nav class="max-w-6xl mx-auto px-4 flex gap-4 border-t border-white/10 text-sm overflow-x-auto bg-white">
-<button class="tab-btn active py-2.5 whitespace-nowrap" data-tab="dashboard">Dashboard</button>
-<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="expenses">Expenses</button>
-<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="procurement">Procurement Checklist</button>
-<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="speakers">Speaker Logistics</button>
-</nav>
+<nav id="tab-nav" class="max-w-6xl mx-auto px-4 flex gap-4 border-t border-white/10 text-sm overflow-x-auto bg-white"></nav>
 </header>
+
+<div id="alert-banner" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center font-medium"></div>
 
 <main class="max-w-6xl mx-auto p-4">
 
-<!-- ---------- DASHBOARD TAB ---------- -->
-<section id="tab-dashboard" class="tab-pane">
+<!-- ---------- DASHBOARD (admin) ---------- -->
+<section id="tab-dashboard" class="tab-pane hidden">
 <div id="dash-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
 <div class="bg-white rounded-xl shadow p-4">
 <h2 class="font-semibold text-slate-700 text-sm mb-3">Overall Sanction Utilisation</h2>
@@ -138,7 +118,7 @@
 </div>
 </section>
 
-<!-- ---------- EXPENSES TAB ---------- -->
+<!-- ---------- EXPENSES (admin) ---------- -->
 <section id="tab-expenses" class="tab-pane hidden">
 <div class="bg-white rounded-xl shadow p-4 mb-4">
 <h2 class="font-semibold text-slate-700 text-sm mb-3">Add Expense</h2>
@@ -149,12 +129,7 @@
 <div><label class="text-xs text-slate-500 block mb-1">Vendor</label><input type="text" id="exp-vendor" class="w-full"></div>
 <div><label class="text-xs text-slate-500 block mb-1">Amount (Rs.)</label><input type="number" step="0.01" id="exp-amount" required class="w-full"></div>
 <div><label class="text-xs text-slate-500 block mb-1">Status</label>
-<select id="exp-status" class="w-full">
-<option value="pending">Pending</option>
-<option value="paid">Paid</option>
-<option value="reimbursed">Reimbursed</option>
-</select>
-</div>
+<select id="exp-status" class="w-full"><option value="pending">Pending</option><option value="paid">Paid</option><option value="reimbursed">Reimbursed</option></select></div>
 <div><label class="text-xs text-slate-500 block mb-1">Payment Mode</label><input type="text" id="exp-mode" class="w-full" placeholder="PFMS / Cash / Card"></div>
 <div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Notes</label><input type="text" id="exp-notes" class="w-full"></div>
 <div><label class="text-xs text-slate-500 block mb-1">Receipt (optional)</label><input type="file" id="exp-receipt" accept="image/*,.pdf" class="w-full text-xs"></div>
@@ -169,52 +144,104 @@
 </div>
 <div class="scrollx">
 <table class="data-tbl w-full" id="expense-table">
-<thead><tr>
-<th>Date</th><th>Head</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Receipt</th><th></th>
-</tr></thead>
+<thead><tr><th>Date</th><th>Head</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Receipt</th><th></th></tr></thead>
 <tbody id="expense-tbody"></tbody>
+<tfoot><tr><td colspan="4">Total</td><td id="expense-total"></td><td colspan="3"></td></tr></tfoot>
 </table>
 <p id="expense-empty" class="hidden text-xs text-slate-400 text-center py-6">No expenses logged yet — add your first one above.</p>
 </div>
 </div>
 </section>
 
-<!-- ---------- PROCUREMENT TAB ---------- -->
+<!-- ---------- PROCUREMENT (admin) ---------- -->
 <section id="tab-procurement" class="tab-pane hidden">
 <div class="bg-white rounded-xl shadow p-4 mb-4">
 <div class="flex items-center justify-between flex-wrap gap-2">
-<h2 class="font-semibold text-slate-700 text-sm">Procurement Checklist (from the Procurement Request Letter)</h2>
+<h2 class="font-semibold text-slate-700 text-sm">Procurement Checklist</h2>
 <span id="procurement-progress" class="text-xs font-semibold text-slate-600"></span>
 </div>
-<div class="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-  <div id="procurement-progress-bar" class="h-1.5 rounded-full bg-emerald-500" style="width:0%"></div>
-</div>
+<div class="w-full bg-slate-100 rounded-full h-1.5 mt-2"><div id="procurement-progress-bar" class="h-1.5 rounded-full bg-emerald-500" style="width:0%"></div></div>
 </div>
 <div class="bg-white rounded-xl shadow p-4">
 <div class="scrollx">
 <table class="data-tbl w-full" id="procurement-table">
-<thead><tr>
-<th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th>
-</tr></thead>
+<thead><tr><th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th></tr></thead>
 <tbody id="procurement-tbody"></tbody>
+<tfoot><tr><td colspan="2">Total</td><td id="procurement-approx-total"></td><td id="procurement-actual-total"></td><td colspan="3"></td></tr></tfoot>
 </table>
 </div>
 </div>
 </section>
 
-<!-- ---------- SPEAKERS TAB ---------- -->
+<!-- ---------- SPEAKER LOGISTICS (admin) ---------- -->
 <section id="tab-speakers" class="tab-pane hidden">
 <div class="bg-white rounded-xl shadow p-4">
 <h2 class="font-semibold text-slate-700 text-sm mb-3">Speaker Travel & Accommodation Logistics</h2>
 <div class="scrollx">
 <table class="data-tbl w-full" id="speakers-table">
-<thead><tr>
-<th>Speaker</th><th>Confirmed Date</th><th>Travel Booked</th><th>Travel Details</th><th>Accommodation Booked</th><th>Accommodation Details</th><th>Arrival</th><th>Departure</th><th>Notes</th>
-</tr></thead>
+<thead><tr><th>Speaker</th><th>Confirmed Date</th><th>Travel Booked</th><th>Travel Details</th><th>Accommodation Booked</th><th>Accommodation Details</th><th>Arrival</th><th>Departure</th><th>Notes</th></tr></thead>
 <tbody id="speakers-tbody"></tbody>
 </table>
 </div>
 </div>
+</section>
+
+<!-- ---------- SCHEDULE (everyone) ---------- -->
+<section id="tab-schedule" class="tab-pane hidden">
+<div id="schedule-admin-form" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Add Session</h2>
+<form id="session-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+<div><label class="text-xs text-slate-500 block mb-1">Date</label><input type="date" id="sess-date" required class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Start Time</label><input type="time" id="sess-start" required class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">End Time</label><input type="time" id="sess-end" class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Location</label><input type="text" id="sess-location" class="w-full" placeholder="Auditorium"></div>
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Title</label><input type="text" id="sess-title" required class="w-full" placeholder="e.g. Keynote: Designing for the Future"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Speaker</label><input type="text" id="sess-speaker" class="w-full"></div>
+<div class="flex items-end"><button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold w-full">Add Session</button></div>
+<div class="md:col-span-4"><label class="text-xs text-slate-500 block mb-1">Description</label><input type="text" id="sess-desc" class="w-full"></div>
+</form>
+</div>
+<div id="schedule-list" class="space-y-3"></div>
+</section>
+
+<!-- ---------- ALERTS (everyone reads; admin posts) ---------- -->
+<section id="tab-alerts" class="tab-pane hidden">
+<div id="alerts-admin-form" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Post a Time Alert</h2>
+<form id="alert-form" class="flex gap-3">
+<input type="text" id="alert-message" required class="flex-1" placeholder="e.g. Session moved to Hall B, starts in 10 minutes">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold">Post</button>
+</form>
+</div>
+<div id="alerts-list" class="space-y-2"></div>
+</section>
+
+<!-- ---------- PHOTOS (everyone) ---------- -->
+<section id="tab-photos" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Share a Photo</h2>
+<form id="photo-form" class="flex flex-col md:flex-row gap-3">
+<input type="file" id="photo-file" accept="image/*" required class="flex-1 text-xs">
+<input type="text" id="photo-caption" class="flex-1" placeholder="Caption (optional)">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">Upload</button>
+</form>
+<p id="photo-form-msg" class="text-xs mt-2"></p>
+</div>
+<div id="photo-gallery" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+</section>
+
+<!-- ---------- POST-CONFERENCE EVENTS (everyone; admin posts) ---------- -->
+<section id="tab-events" class="tab-pane hidden">
+<div id="events-admin-form" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Post an Event</h2>
+<form id="event-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+<div><label class="text-xs text-slate-500 block mb-1">Date</label><input type="date" id="event-date" class="w-full"></div>
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Title</label><input type="text" id="event-title" required class="w-full"></div>
+<div class="flex items-end"><button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold w-full">Post Event</button></div>
+<div class="md:col-span-4"><label class="text-xs text-slate-500 block mb-1">Description</label><input type="text" id="event-desc" class="w-full"></div>
+</form>
+</div>
+<div id="events-list" class="space-y-3"></div>
 </section>
 
 </main>
@@ -222,25 +249,29 @@
 
 <script>
 // ============================================================================
-// SETUP CHECK
+// SETUP
 // ============================================================================
 const CFG = window.SUPABASE_CONFIG || {};
-const looksLikePlaceholder = (s) => !s || /YOUR-PROJECT-REF|YOUR-ANON|xxxxx|your-project|placeholder/i.test(s);
+const looksLikePlaceholder = (s) => !s || /YOUR-PROJECT-REF|YOUR-ANON|xxxxx|placeholder/i.test(s);
 const looksLikeValidUrl = (s) => /^https:\/\/[a-z0-9]{15,25}\.supabase\.co\/?$/i.test((s || "").trim());
 const isConfigured = CFG.url && CFG.anonKey && !looksLikePlaceholder(CFG.url) && !looksLikePlaceholder(CFG.anonKey) && looksLikeValidUrl(CFG.url);
-
 if (!isConfigured) {
-  const warningEl = document.getElementById("config-warning");
-  warningEl.classList.remove("hidden");
-  if (CFG.url && !looksLikeValidUrl(CFG.url)) {
-    warningEl.textContent = `⚠ config.js has an invalid Project URL ("${CFG.url}") — it should look like https://abcdefghijklmno.supabase.co, copied exactly from Supabase Settings → API. Edit config.js and fix it.`;
-  }
+  const w = document.getElementById("config-warning");
+  w.textContent = "⚠ Supabase is not configured correctly. Check the url/anonKey values at the top of this file.";
+  w.classList.remove("hidden");
 }
-
 const sb = isConfigured ? supabase.createClient(CFG.url, CFG.anonKey) : null;
 
+const fmtRs = (n) => "Rs. " + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const escapeHtml = (s) => (s ?? "").toString().replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let currentUser = null;
+let currentRole = "participant";
+let budgetHeadsCache = [];
+let appInitialised = false;
+
 // ============================================================================
-// AUTH — sign in / sign up toggle
+// AUTH
 // ============================================================================
 const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
@@ -251,43 +282,15 @@ const authSuccess = document.getElementById("auth-success");
 const showLoginBtn = document.getElementById("show-login-btn");
 const showSignupBtn = document.getElementById("show-signup-btn");
 
-function clearAuthMessages() {
-  authError.classList.add("hidden");
-  authSuccess.classList.add("hidden");
-}
-
-showLoginBtn.addEventListener("click", () => {
-  showLoginBtn.classList.add("active");
-  showSignupBtn.classList.remove("active");
-  loginForm.classList.remove("hidden");
-  signupForm.classList.add("hidden");
-  clearAuthMessages();
-});
-
-showSignupBtn.addEventListener("click", () => {
-  showSignupBtn.classList.add("active");
-  showLoginBtn.classList.remove("active");
-  signupForm.classList.remove("hidden");
-  loginForm.classList.add("hidden");
-  clearAuthMessages();
-});
-
-function showAuthError(msg) {
-  authSuccess.classList.add("hidden");
-  authError.textContent = msg;
-  authError.classList.remove("hidden");
-}
-
-function showAuthSuccess(msg) {
-  authError.classList.add("hidden");
-  authSuccess.textContent = msg;
-  authSuccess.classList.remove("hidden");
-}
+function clearAuthMessages() { authError.classList.add("hidden"); authSuccess.classList.add("hidden"); }
+showLoginBtn.addEventListener("click", () => { showLoginBtn.classList.add("active"); showSignupBtn.classList.remove("active"); loginForm.classList.remove("hidden"); signupForm.classList.add("hidden"); clearAuthMessages(); });
+showSignupBtn.addEventListener("click", () => { showSignupBtn.classList.add("active"); showLoginBtn.classList.remove("active"); signupForm.classList.remove("hidden"); loginForm.classList.add("hidden"); clearAuthMessages(); });
+function showAuthError(msg) { authSuccess.classList.add("hidden"); authError.textContent = msg; authError.classList.remove("hidden"); }
+function showAuthSuccess(msg) { authError.classList.add("hidden"); authSuccess.textContent = msg; authSuccess.classList.remove("hidden"); }
 
 loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  clearAuthMessages();
-  if (!sb) { showAuthError("App is not configured yet — edit config.js first."); return; }
+  e.preventDefault(); clearAuthMessages();
+  if (!sb) { showAuthError("App is not configured yet."); return; }
   const btn = document.getElementById("login-submit-btn");
   btn.disabled = true; btn.textContent = "Signing in…";
   const email = document.getElementById("login-email").value.trim();
@@ -298,89 +301,112 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 signupForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  clearAuthMessages();
-  if (!sb) { showAuthError("App is not configured yet — edit config.js first."); return; }
-
+  e.preventDefault(); clearAuthMessages();
+  if (!sb) { showAuthError("App is not configured yet."); return; }
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
   const password2 = document.getElementById("signup-password2").value;
-
   if (password !== password2) { showAuthError("Passwords don't match."); return; }
   if (password.length < 6) { showAuthError("Password must be at least 6 characters."); return; }
-
   const btn = document.getElementById("signup-submit-btn");
   btn.disabled = true; btn.textContent = "Creating account…";
-
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: name } }
-  });
-
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
   btn.disabled = false; btn.textContent = "Create Account";
-
   if (error) { showAuthError(error.message); return; }
-
-  // If the project requires email confirmation, there will be no active session yet.
-  if (data.session) {
-    // Auto-confirmed — onAuthStateChange will take over and log them in.
-    showAuthSuccess("Account created — signing you in…");
-  } else {
-    showAuthSuccess("Account created. Check your email to confirm, then sign in.");
-    signupForm.reset();
-    showLoginBtn.click();
-  }
+  if (data.session) { showAuthSuccess("Account created — signing you in…"); }
+  else { showAuthSuccess("Account created. Check your email to confirm, then sign in."); signupForm.reset(); showLoginBtn.click(); }
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await sb.auth.signOut();
-});
+document.getElementById("logout-btn").addEventListener("click", async () => { await sb.auth.signOut(); });
 
 if (sb) {
-  sb.auth.onAuthStateChange((_event, session) => {
+  sb.auth.onAuthStateChange(async (_event, session) => {
     if (session) {
+      currentUser = session.user;
       loginView.classList.add("hidden");
       appView.classList.remove("hidden");
       document.getElementById("user-email").textContent = session.user.email;
-      initApp();
+      await loadRoleAndInit();
     } else {
+      currentUser = null;
       appView.classList.add("hidden");
       loginView.classList.remove("hidden");
+      appInitialised = false;
     }
   });
 }
 
 // ============================================================================
-// TABS
+// ROLE + NAV
 // ============================================================================
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
-    document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+const TABS_BY_ROLE = {
+  admin: [
+    ["dashboard", "Dashboard"], ["expenses", "Expenses"], ["procurement", "Procurement"],
+    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["alerts", "Alerts"],
+    ["photos", "Photos"], ["events", "Events"]
+  ],
+  speaker: [["schedule", "Schedule"], ["photos", "Photos"], ["events", "Events"]],
+  participant: [["schedule", "Schedule"], ["photos", "Photos"], ["events", "Events"]]
+};
+
+async function loadRoleAndInit() {
+  const { data, error } = await sb.from("profiles").select("role").eq("id", currentUser.id).single();
+  currentRole = (!error && data && data.role) ? data.role : "participant";
+
+  const badge = document.getElementById("user-role-badge");
+  badge.textContent = currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
+  badge.className = "badge badge-" + currentRole;
+
+  const nav = document.getElementById("tab-nav");
+  const tabs = TABS_BY_ROLE[currentRole] || TABS_BY_ROLE.participant;
+  nav.innerHTML = tabs.map(([key, label], i) =>
+    `<button class="tab-btn ${i === 0 ? "active" : ""} py-2.5 whitespace-nowrap" data-tab="${key}">${label}</button>`
+  ).join("");
+  nav.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      nav.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+      document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+    });
   });
-});
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+  const firstTab = tabs[0][0];
+  document.getElementById("tab-" + firstTab).classList.remove("hidden");
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-const fmtRs = (n) => "Rs. " + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
-const escapeHtml = (s) => (s ?? "").toString().replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  document.getElementById("schedule-admin-form").classList.toggle("hidden", currentRole !== "admin");
+  document.getElementById("alerts-admin-form").classList.toggle("hidden", currentRole !== "admin");
+  document.getElementById("events-admin-form").classList.toggle("hidden", currentRole !== "admin");
 
-let appInitialised = false;
-let budgetHeadsCache = [];
-
-async function initApp() {
-  if (appInitialised) { refreshAll(); return; }
+  if (appInitialised) { refreshAllForRole(); return; }
   appInitialised = true;
-  await loadBudgetHeads();
-  await refreshAll();
+  await refreshAllForRole();
   subscribeRealtime();
 }
 
+async function refreshAllForRole() {
+  await renderAlertBanner();
+  if (currentRole === "admin") {
+    await loadBudgetHeads();
+    await Promise.all([renderDashboard(), renderExpenses(), renderProcurement(), renderSpeakers()]);
+  }
+  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents()]);
+}
+
+function subscribeRealtime() {
+  sb.channel("public:expenses").on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => { if (currentRole === "admin") { renderDashboard(); renderExpenses(); } }).subscribe();
+  sb.channel("public:procurement_items").on("postgres_changes", { event: "*", schema: "public", table: "procurement_items" }, () => { if (currentRole === "admin") renderProcurement(); }).subscribe();
+  sb.channel("public:speakers").on("postgres_changes", { event: "*", schema: "public", table: "speakers" }, () => { if (currentRole === "admin") renderSpeakers(); }).subscribe();
+  sb.channel("public:sessions").on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, renderSchedule).subscribe();
+  sb.channel("public:alerts").on("postgres_changes", { event: "*", schema: "public", table: "alerts" }, () => { renderAlertBanner(); renderAlertsList(); }).subscribe();
+  sb.channel("public:photos").on("postgres_changes", { event: "*", schema: "public", table: "photos" }, renderPhotos).subscribe();
+  sb.channel("public:post_events").on("postgres_changes", { event: "*", schema: "public", table: "post_events" }, renderEvents).subscribe();
+}
+
+// ============================================================================
+// DASHBOARD / EXPENSES / PROCUREMENT / SPEAKERS (admin only — unchanged logic, plus totals)
+// ============================================================================
 async function loadBudgetHeads() {
   const { data, error } = await sb.from("budget_heads").select("*").order("id");
   if (error) { console.error(error); return; }
@@ -389,67 +415,37 @@ async function loadBudgetHeads() {
   headSelect.innerHTML = budgetHeadsCache.map(h => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join("");
 }
 
-async function refreshAll() {
-  await Promise.all([renderDashboard(), renderExpenses(), renderProcurement(), renderSpeakers()]);
-}
-
-function subscribeRealtime() {
-  sb.channel("public:expenses").on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => { renderDashboard(); renderExpenses(); }).subscribe();
-  sb.channel("public:procurement_items").on("postgres_changes", { event: "*", schema: "public", table: "procurement_items" }, renderProcurement).subscribe();
-  sb.channel("public:speakers").on("postgres_changes", { event: "*", schema: "public", table: "speakers" }, renderSpeakers).subscribe();
-}
-
-// ============================================================================
-// DASHBOARD
-// ============================================================================
 async function renderDashboard() {
   const { data: expenses, error } = await sb.from("expenses").select("budget_head_id, amount, status");
   if (error) { console.error(error); return; }
-
   const cardsEl = document.getElementById("dash-cards");
   let totalSanctioned = 0, totalSpent = 0, totalPending = 0;
-
   cardsEl.innerHTML = budgetHeadsCache.map(head => {
     const rows = expenses.filter(e => e.budget_head_id === head.id);
     const spent = rows.filter(r => r.status === "paid" || r.status === "reimbursed").reduce((s, r) => s + Number(r.amount), 0);
     const pending = rows.filter(r => r.status === "pending").reduce((s, r) => s + Number(r.amount), 0);
     const overPct = head.sanctioned_amount > 0 ? ((spent + pending) / head.sanctioned_amount) * 100 : 0;
     const barColor = overPct > 100 ? "bg-red-500" : overPct > 85 ? "bg-amber-500" : "bg-emerald-500";
-    totalSanctioned += Number(head.sanctioned_amount);
-    totalSpent += spent;
-    totalPending += pending;
-    return `
-      <div class="bg-white rounded-xl shadow p-4 hover:shadow-md transition-shadow">
-        <h3 class="text-xs font-semibold text-slate-500 mb-1">${escapeHtml(head.name)}</h3>
-        <p class="text-xl font-bold text-slate-800">${fmtRs(spent)} <span class="text-xs font-normal text-slate-400">/ ${fmtRs(head.sanctioned_amount)}</span></p>
-        <div class="w-full bg-slate-100 rounded-full h-2 mt-2 mb-1">
-          <div class="${barColor} h-2 rounded-full transition-all" style="width:${Math.min(100, overPct)}%"></div>
-        </div>
-        <p class="text-[11px] text-slate-400">Pending: ${fmtRs(pending)} &nbsp;|&nbsp; Balance: ${fmtRs(head.sanctioned_amount - spent - pending)}</p>
-      </div>`;
+    totalSanctioned += Number(head.sanctioned_amount); totalSpent += spent; totalPending += pending;
+    return `<div class="bg-white rounded-xl shadow p-4 hover:shadow-md transition-shadow">
+      <h3 class="text-xs font-semibold text-slate-500 mb-1">${escapeHtml(head.name)}</h3>
+      <p class="text-xl font-bold text-slate-800">${fmtRs(spent)} <span class="text-xs font-normal text-slate-400">/ ${fmtRs(head.sanctioned_amount)}</span></p>
+      <div class="w-full bg-slate-100 rounded-full h-2 mt-2 mb-1"><div class="${barColor} h-2 rounded-full transition-all" style="width:${Math.min(100, overPct)}%"></div></div>
+      <p class="text-[11px] text-slate-400">Pending: ${fmtRs(pending)} &nbsp;|&nbsp; Balance: ${fmtRs(head.sanctioned_amount - spent - pending)}</p>
+    </div>`;
   }).join("");
-
   const overallEl = document.getElementById("dash-overall");
   const overallPct = totalSanctioned > 0 ? ((totalSpent + totalPending) / totalSanctioned) * 100 : 0;
   const overallColor = overallPct > 100 ? "bg-red-500" : overallPct > 85 ? "bg-amber-500" : "bg-emerald-500";
-  overallEl.innerHTML = `
-    <p class="text-2xl font-bold text-slate-800">${fmtRs(totalSpent)} <span class="text-sm font-normal text-slate-400">spent of ${fmtRs(totalSanctioned)} sanctioned</span></p>
-    <div class="w-full bg-slate-100 rounded-full h-3 mt-2 mb-1">
-      <div class="${overallColor} h-3 rounded-full transition-all" style="width:${Math.min(100, overallPct)}%"></div>
-    </div>
-    <p class="text-xs text-slate-400">Pending/committed: ${fmtRs(totalPending)} &nbsp;|&nbsp; Balance remaining: ${fmtRs(totalSanctioned - totalSpent - totalPending)}</p>
-  `;
+  overallEl.innerHTML = `<p class="text-2xl font-bold text-slate-800">${fmtRs(totalSpent)} <span class="text-sm font-normal text-slate-400">spent of ${fmtRs(totalSanctioned)} sanctioned</span></p>
+    <div class="w-full bg-slate-100 rounded-full h-3 mt-2 mb-1"><div class="${overallColor} h-3 rounded-full transition-all" style="width:${Math.min(100, overallPct)}%"></div></div>
+    <p class="text-xs text-slate-400">Pending/committed: ${fmtRs(totalPending)} &nbsp;|&nbsp; Balance remaining: ${fmtRs(totalSanctioned - totalSpent - totalPending)}</p>`;
 }
 
-// ============================================================================
-// EXPENSES
-// ============================================================================
 document.getElementById("expense-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msgEl = document.getElementById("expense-form-msg");
-  msgEl.textContent = "Saving...";
-  msgEl.className = "text-xs mt-2 text-slate-500";
-
+  msgEl.textContent = "Saving..."; msgEl.className = "text-xs mt-2 text-slate-500";
   let receiptUrl = null;
   const file = document.getElementById("exp-receipt").files[0];
   if (file) {
@@ -458,7 +454,6 @@ document.getElementById("expense-form").addEventListener("submit", async (e) => 
     if (upErr) { msgEl.textContent = "Receipt upload failed: " + upErr.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
     receiptUrl = path;
   }
-
   const payload = {
     budget_head_id: Number(document.getElementById("exp-head").value),
     expense_date: document.getElementById("exp-date").value,
@@ -472,12 +467,10 @@ document.getElementById("expense-form").addEventListener("submit", async (e) => 
   };
   const { error } = await sb.from("expenses").insert(payload);
   if (error) { msgEl.textContent = "Error: " + error.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
-  msgEl.textContent = "Saved ✓";
-  msgEl.className = "text-xs mt-2 text-emerald-600";
+  msgEl.textContent = "Saved ✓"; msgEl.className = "text-xs mt-2 text-emerald-600";
   e.target.reset();
   document.getElementById("exp-date").value = new Date().toISOString().slice(0, 10);
-  renderExpenses();
-  renderDashboard();
+  renderExpenses(); renderDashboard();
 });
 
 async function renderExpenses() {
@@ -486,20 +479,17 @@ async function renderExpenses() {
   document.getElementById("expense-count").textContent = data.length + " entries";
   document.getElementById("expense-empty").classList.toggle("hidden", data.length !== 0);
   const headById = Object.fromEntries(budgetHeadsCache.map(h => [h.id, h.name]));
-
-  const badgeClass = { pending: "badge-pending", paid: "badge-paid", reimbursed: "badge-reimbursed" };
-
+  let total = 0;
   const rowsHtml = await Promise.all(data.map(async (r) => {
+    total += Number(r.amount);
     let receiptLink = "—";
     if (r.receipt_url) {
       const { data: signed } = await sb.storage.from("receipts").createSignedUrl(r.receipt_url, 3600);
       if (signed) receiptLink = `<a href="${signed.signedUrl}" target="_blank" class="text-blue-600 underline">View</a>`;
     }
     return `<tr>
-      <td>${r.expense_date}</td>
-      <td>${escapeHtml(headById[r.budget_head_id] || "—")}</td>
-      <td>${escapeHtml(r.description)}</td>
-      <td>${escapeHtml(r.vendor)}</td>
+      <td>${r.expense_date}</td><td>${escapeHtml(headById[r.budget_head_id] || "—")}</td>
+      <td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.vendor)}</td>
       <td class="font-semibold">${fmtRs(r.amount)}</td>
       <td><select class="exp-status-select text-xs" data-id="${r.id}">
             <option value="pending" ${r.status === "pending" ? "selected" : ""}>Pending</option>
@@ -511,39 +501,24 @@ async function renderExpenses() {
     </tr>`;
   }));
   document.getElementById("expense-tbody").innerHTML = rowsHtml.join("");
-
-  document.querySelectorAll(".exp-status-select").forEach(sel => {
-    sel.addEventListener("change", async () => {
-      await sb.from("expenses").update({ status: sel.value }).eq("id", sel.dataset.id);
-      renderDashboard();
-    });
-  });
-  document.querySelectorAll(".exp-delete").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Delete this expense entry?")) return;
-      await sb.from("expenses").delete().eq("id", btn.dataset.id);
-      renderExpenses();
-      renderDashboard();
-    });
-  });
+  document.getElementById("expense-total").textContent = fmtRs(total);
+  document.querySelectorAll(".exp-status-select").forEach(sel => sel.addEventListener("change", async () => { await sb.from("expenses").update({ status: sel.value }).eq("id", sel.dataset.id); renderDashboard(); }));
+  document.querySelectorAll(".exp-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this expense entry?")) return; await sb.from("expenses").delete().eq("id", btn.dataset.id); renderExpenses(); renderDashboard(); }));
 }
 document.getElementById("exp-date").value = new Date().toISOString().slice(0, 10);
 
-// ============================================================================
-// PROCUREMENT CHECKLIST
-// ============================================================================
 async function renderProcurement() {
   const { data, error } = await sb.from("procurement_items").select("*, budget_heads(name)").order("budget_head_id").order("id");
   if (error) { console.error(error); return; }
   const delivered = data.filter(d => d.status === "delivered").length;
   document.getElementById("procurement-progress").textContent = `${delivered} / ${data.length} delivered`;
   document.getElementById("procurement-progress-bar").style.width = data.length ? `${(delivered / data.length) * 100}%` : "0%";
-
-  document.getElementById("procurement-tbody").innerHTML = data.map(item => `
-    <tr>
+  let approxTotal = 0, actualTotal = 0;
+  document.getElementById("procurement-tbody").innerHTML = data.map(item => {
+    approxTotal += Number(item.approx_price || 0); actualTotal += Number(item.actual_price || 0);
+    return `<tr>
       <td class="text-xs text-slate-500">${escapeHtml(item.budget_heads?.name || "")}</td>
-      <td>${escapeHtml(item.item_name)}</td>
-      <td>${fmtRs(item.approx_price)}</td>
+      <td>${escapeHtml(item.item_name)}</td><td>${fmtRs(item.approx_price)}</td>
       <td><input type="number" step="0.01" class="proc-actual w-24" data-id="${item.id}" value="${item.actual_price ?? ""}" placeholder="—"></td>
       <td><input type="text" class="proc-vendor w-28" data-id="${item.id}" value="${escapeHtml(item.vendor || "")}" placeholder="—"></td>
       <td><select class="proc-status text-xs" data-id="${item.id}">
@@ -552,31 +527,21 @@ async function renderProcurement() {
             <option value="delivered" ${item.status === "delivered" ? "selected" : ""}>Delivered</option>
           </select></td>
       <td><input type="text" class="proc-notes w-32" data-id="${item.id}" value="${escapeHtml(item.notes || "")}" placeholder="—"></td>
-    </tr>`).join("");
-
-  const debouncedUpdate = (() => {
-    let timers = {};
-    return (id, field, value) => {
-      clearTimeout(timers[id + field]);
-      timers[id + field] = setTimeout(() => sb.from("procurement_items").update({ [field]: value }).eq("id", id), 500);
-    };
-  })();
-
+    </tr>`;
+  }).join("");
+  document.getElementById("procurement-approx-total").textContent = fmtRs(approxTotal);
+  document.getElementById("procurement-actual-total").textContent = fmtRs(actualTotal);
+  const debouncedUpdate = (() => { let timers = {}; return (id, field, value) => { clearTimeout(timers[id + field]); timers[id + field] = setTimeout(() => sb.from("procurement_items").update({ [field]: value }).eq("id", id), 500); }; })();
   document.querySelectorAll(".proc-status").forEach(el => el.addEventListener("change", () => sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id).then(renderProcurement)));
-  document.querySelectorAll(".proc-actual").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "actual_price", el.value ? Number(el.value) : null)));
+  document.querySelectorAll(".proc-actual").forEach(el => el.addEventListener("input", () => { debouncedUpdate(el.dataset.id, "actual_price", el.value ? Number(el.value) : null); setTimeout(renderProcurement, 600); }));
   document.querySelectorAll(".proc-vendor").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "vendor", el.value)));
   document.querySelectorAll(".proc-notes").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "notes", el.value)));
 }
 
-// ============================================================================
-// SPEAKERS
-// ============================================================================
 async function renderSpeakers() {
   const { data, error } = await sb.from("speakers").select("*").order("id");
   if (error) { console.error(error); return; }
-
-  document.getElementById("speakers-tbody").innerHTML = data.map(s => `
-    <tr>
+  document.getElementById("speakers-tbody").innerHTML = data.map(s => `<tr>
       <td><span class="font-semibold">${escapeHtml(s.name)}</span><br><span class="text-[11px] text-slate-400">${escapeHtml(s.institute || "")}</span></td>
       <td class="text-xs">${escapeHtml(s.confirmed_date)}</td>
       <td class="text-center"><input type="checkbox" class="spk-travel" data-id="${s.id}" ${s.travel_booked ? "checked" : ""}></td>
@@ -587,15 +552,7 @@ async function renderSpeakers() {
       <td><input type="datetime-local" class="spk-departure w-40" data-id="${s.id}" value="${s.departure_datetime ? s.departure_datetime.slice(0, 16) : ""}"></td>
       <td><input type="text" class="spk-notes w-32" data-id="${s.id}" value="${escapeHtml(s.notes || "")}" placeholder="—"></td>
     </tr>`).join("");
-
-  const debouncedUpdate = (() => {
-    let timers = {};
-    return (id, field, value) => {
-      clearTimeout(timers[id + field]);
-      timers[id + field] = setTimeout(() => sb.from("speakers").update({ [field]: value }).eq("id", id), 500);
-    };
-  })();
-
+  const debouncedUpdate = (() => { let timers = {}; return (id, field, value) => { clearTimeout(timers[id + field]); timers[id + field] = setTimeout(() => sb.from("speakers").update({ [field]: value }).eq("id", id), 500); }; })();
   document.querySelectorAll(".spk-travel").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ travel_booked: el.checked }).eq("id", el.dataset.id)));
   document.querySelectorAll(".spk-accom").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ accommodation_booked: el.checked }).eq("id", el.dataset.id)));
   document.querySelectorAll(".spk-travel-details").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "travel_details", el.value)));
@@ -603,6 +560,208 @@ async function renderSpeakers() {
   document.querySelectorAll(".spk-notes").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "notes", el.value)));
   document.querySelectorAll(".spk-arrival").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ arrival_datetime: el.value || null }).eq("id", el.dataset.id)));
   document.querySelectorAll(".spk-departure").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ departure_datetime: el.value || null }).eq("id", el.dataset.id)));
+}
+
+// ============================================================================
+// SCHEDULE + FEEDBACK (everyone)
+// ============================================================================
+document.getElementById("session-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    title: document.getElementById("sess-title").value,
+    speaker_name: document.getElementById("sess-speaker").value || null,
+    session_date: document.getElementById("sess-date").value,
+    start_time: document.getElementById("sess-start").value,
+    end_time: document.getElementById("sess-end").value || null,
+    location: document.getElementById("sess-location").value || null,
+    description: document.getElementById("sess-desc").value || null,
+  };
+  const { error } = await sb.from("sessions").insert(payload);
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  renderSchedule();
+});
+
+async function renderSchedule() {
+  const { data: sessions, error } = await sb.from("sessions").select("*").order("session_date").order("start_time");
+  if (error) { console.error(error); return; }
+  let feedbackByUser = {};
+  let feedbackAgg = {};
+  if (currentUser) {
+    const { data: fb } = await sb.from("feedback").select("*");
+    (fb || []).forEach(f => {
+      if (f.user_id === currentUser.id) feedbackByUser[f.session_id] = f;
+      feedbackAgg[f.session_id] = feedbackAgg[f.session_id] || [];
+      feedbackAgg[f.session_id].push(f.rating);
+    });
+  }
+  const listEl = document.getElementById("schedule-list");
+  if (!sessions.length) { listEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No sessions scheduled yet.</p>`; return; }
+  listEl.innerHTML = sessions.map(s => {
+    const ratings = feedbackAgg[s.id] || [];
+    const avg = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) : null;
+    const mine = feedbackByUser[s.id];
+    const canRate = currentRole !== "admin";
+    return `<div class="bg-white rounded-xl shadow p-4">
+      <div class="flex justify-between items-start flex-wrap gap-2">
+        <div>
+          <p class="text-xs text-slate-400">${s.session_date} &middot; ${s.start_time?.slice(0,5)}${s.end_time ? "–" + s.end_time.slice(0,5) : ""} ${s.location ? "&middot; " + escapeHtml(s.location) : ""}</p>
+          <h3 class="font-semibold text-slate-800">${escapeHtml(s.title)}</h3>
+          ${s.speaker_name ? `<p class="text-sm text-slate-500">${escapeHtml(s.speaker_name)}</p>` : ""}
+          ${s.description ? `<p class="text-xs text-slate-400 mt-1">${escapeHtml(s.description)}</p>` : ""}
+        </div>
+        ${avg ? `<span class="badge bg-amber-100 text-amber-800">★ ${avg} (${ratings.length})</span>` : ""}
+        ${currentRole === "admin" ? `<button class="sess-delete text-red-500 text-xs hover:underline" data-id="${s.id}">Delete</button>` : ""}
+      </div>
+      ${canRate ? `<div class="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+        <div class="flex gap-0.5 star-row" data-session="${s.id}">
+          ${[1,2,3,4,5].map(n => `<span class="star ${mine && mine.rating >= n ? "filled" : ""}" data-rating="${n}">★</span>`).join("")}
+        </div>
+        <input type="text" class="fb-comment flex-1 min-w-[160px]" data-session="${s.id}" placeholder="Quick feedback (optional)" value="${escapeHtml(mine?.comment || "")}">
+        <button class="fb-submit btn-primary text-white text-xs rounded-lg px-3 py-1.5" data-session="${s.id}">${mine ? "Update" : "Submit"}</button>
+      </div>` : ""}
+    </div>`;
+  }).join("");
+
+  listEl.querySelectorAll(".sess-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this session?")) return; await sb.from("sessions").delete().eq("id", btn.dataset.id); renderSchedule(); }));
+
+  let selectedRatings = {};
+  listEl.querySelectorAll(".star-row").forEach(row => {
+    const sid = row.dataset.session;
+    selectedRatings[sid] = [...row.querySelectorAll(".star.filled")].length;
+    row.querySelectorAll(".star").forEach(star => {
+      star.addEventListener("click", () => {
+        const n = Number(star.dataset.rating);
+        selectedRatings[sid] = n;
+        row.querySelectorAll(".star").forEach(s2 => s2.classList.toggle("filled", Number(s2.dataset.rating) <= n));
+      });
+    });
+  });
+  listEl.querySelectorAll(".fb-submit").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const sid = btn.dataset.session;
+      const rating = selectedRatings[sid] || 0;
+      if (!rating) { alert("Pick a star rating first."); return; }
+      const comment = listEl.querySelector(`.fb-comment[data-session="${sid}"]`).value;
+      const { error } = await sb.from("feedback").upsert({ session_id: Number(sid), user_id: currentUser.id, rating, comment: comment || null }, { onConflict: "session_id,user_id" });
+      if (error) { alert("Error: " + error.message); return; }
+      renderSchedule();
+    });
+  });
+}
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+document.getElementById("alert-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = document.getElementById("alert-message").value.trim();
+  if (!message) return;
+  const { error } = await sb.from("alerts").insert({ message, active: true, created_by: currentUser.id });
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  renderAlertBanner(); renderAlertsList();
+});
+
+async function renderAlertBanner() {
+  const { data } = await sb.from("alerts").select("*").eq("active", true).order("created_at", { ascending: false }).limit(1);
+  const banner = document.getElementById("alert-banner");
+  if (data && data.length) { banner.textContent = "⏰ " + data[0].message; banner.classList.remove("hidden"); }
+  else { banner.classList.add("hidden"); }
+}
+
+async function renderAlertsList() {
+  const { data, error } = await sb.from("alerts").select("*").order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const el = document.getElementById("alerts-list");
+  if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No alerts posted yet.</p>`; return; }
+  el.innerHTML = data.map(a => `<div class="bg-white rounded-xl shadow p-3 flex items-center justify-between gap-3">
+      <div><p class="text-sm ${a.active ? "text-slate-800 font-medium" : "text-slate-400 line-through"}">${escapeHtml(a.message)}</p>
+      <p class="text-[11px] text-slate-400">${new Date(a.created_at).toLocaleString()}</p></div>
+      ${currentRole === "admin" ? `<div class="flex gap-2 shrink-0">
+        <button class="alert-toggle text-xs text-blue-600 hover:underline" data-id="${a.id}" data-active="${a.active}">${a.active ? "Deactivate" : "Reactivate"}</button>
+        <button class="alert-delete text-xs text-red-500 hover:underline" data-id="${a.id}">Delete</button>
+      </div>` : ""}
+    </div>`).join("");
+  el.querySelectorAll(".alert-toggle").forEach(btn => btn.addEventListener("click", async () => { await sb.from("alerts").update({ active: btn.dataset.active !== "true" }).eq("id", btn.dataset.id); renderAlertBanner(); renderAlertsList(); }));
+  el.querySelectorAll(".alert-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this alert?")) return; await sb.from("alerts").delete().eq("id", btn.dataset.id); renderAlertBanner(); renderAlertsList(); }));
+}
+
+// ============================================================================
+// PHOTOS
+// ============================================================================
+document.getElementById("photo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById("photo-form-msg");
+  const file = document.getElementById("photo-file").files[0];
+  if (!file) return;
+  msgEl.textContent = "Uploading..."; msgEl.className = "text-xs mt-2 text-slate-500";
+  const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+  const { error: upErr } = await sb.storage.from("photos").upload(path, file);
+  if (upErr) { msgEl.textContent = "Upload failed: " + upErr.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+  const caption = document.getElementById("photo-caption").value || null;
+  const { error } = await sb.from("photos").insert({ uploaded_by: currentUser.id, storage_path: path, caption });
+  if (error) { msgEl.textContent = "Error: " + error.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+  msgEl.textContent = "Uploaded ✓"; msgEl.className = "text-xs mt-2 text-emerald-600";
+  e.target.reset();
+  renderPhotos();
+});
+
+async function renderPhotos() {
+  const { data, error } = await sb.from("photos").select("*").order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const gallery = document.getElementById("photo-gallery");
+  if (!data.length) { gallery.innerHTML = `<p class="col-span-full text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No photos shared yet.</p>`; return; }
+  gallery.innerHTML = data.map(p => {
+    const { data: pub } = sb.storage.from("photos").getPublicUrl(p.storage_path);
+    const canDelete = currentRole === "admin" || p.uploaded_by === currentUser.id;
+    return `<div class="bg-white rounded-xl shadow overflow-hidden">
+      <img src="${pub.publicUrl}" class="w-full h-32 object-cover" loading="lazy">
+      <div class="p-2">
+        ${p.caption ? `<p class="text-xs text-slate-600">${escapeHtml(p.caption)}</p>` : ""}
+        ${canDelete ? `<button class="photo-delete text-[11px] text-red-500 hover:underline mt-1" data-id="${p.id}" data-path="${p.storage_path}">Delete</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+  gallery.querySelectorAll(".photo-delete").forEach(btn => btn.addEventListener("click", async () => {
+    if (!confirm("Delete this photo?")) return;
+    await sb.storage.from("photos").remove([btn.dataset.path]);
+    await sb.from("photos").delete().eq("id", btn.dataset.id);
+    renderPhotos();
+  }));
+}
+
+// ============================================================================
+// POST-CONFERENCE EVENTS
+// ============================================================================
+document.getElementById("event-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    title: document.getElementById("event-title").value,
+    description: document.getElementById("event-desc").value || null,
+    event_date: document.getElementById("event-date").value || null,
+    created_by: currentUser.id,
+  };
+  const { error } = await sb.from("post_events").insert(payload);
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  renderEvents();
+});
+
+async function renderEvents() {
+  const { data, error } = await sb.from("post_events").select("*").order("event_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const el = document.getElementById("events-list");
+  if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No events posted yet.</p>`; return; }
+  el.innerHTML = data.map(ev => `<div class="bg-white rounded-xl shadow p-4 flex justify-between items-start gap-3">
+      <div>
+        ${ev.event_date ? `<p class="text-xs text-slate-400">${ev.event_date}</p>` : ""}
+        <h3 class="font-semibold text-slate-800">${escapeHtml(ev.title)}</h3>
+        ${ev.description ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(ev.description)}</p>` : ""}
+      </div>
+      ${currentRole === "admin" ? `<button class="event-delete text-red-500 text-xs hover:underline shrink-0" data-id="${ev.id}">Delete</button>` : ""}
+    </div>`).join("");
+  el.querySelectorAll(".event-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this event?")) return; await sb.from("post_events").delete().eq("id", btn.dataset.id); renderEvents(); }));
 }
 </script>
 </body>
