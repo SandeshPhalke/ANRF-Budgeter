@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Futures of Design — Workshop Budget & Logistics Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .tab-btn.active { border-bottom: 3px solid #1e3a5f; color: #1e3a5f; font-weight: 600; }
+  table.data-tbl th, table.data-tbl td { padding: 8px 10px; font-size: 13px; vertical-align: top; }
+  table.data-tbl th { background: #1e3a5f; color: white; text-align: left; position: sticky; top: 0; }
+  table.data-tbl tr:nth-child(even) { background: #f5f7fa; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge-pending { background: #fef3c7; color: #92400e; }
+  .badge-paid { background: #d1fae5; color: #065f46; }
+  .badge-reimbursed { background: #dbeafe; color: #1e40af; }
+  .badge-ordered { background: #e0e7ff; color: #3730a3; }
+  .badge-delivered { background: #d1fae5; color: #065f46; }
+  .scrollx { overflow-x: auto; }
+  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #1e3a5f; }
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+<!-- ==================== LOGIN VIEW ==================== -->
+<div id="login-view" class="min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
+    <h1 class="text-lg font-bold text-slate-800 mb-1">Futures of Design</h1>
+    <p class="text-xs text-slate-500 mb-6">Workshop Budget & Logistics Tracker — 07–11 Sept 2026</p>
+    <div id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 mb-3"></div>
+    <form id="login-form" class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
+        <input type="email" id="login-email" required class="w-full" placeholder="you@iiitdwd.ac.in" />
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
+        <input type="password" id="login-password" required class="w-full" placeholder="••••••••" />
+      </div>
+      <button type="submit" class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm font-semibold hover:bg-slate-700">Sign In</button>
+    </form>
+    <p class="text-[11px] text-slate-400 mt-4">No account? Ask the Convener to create one for you in the Supabase dashboard (Authentication → Users).</p>
+    <p id="config-warning" class="hidden text-[11px] text-red-500 mt-3 border-t pt-3">⚠ config.js still has placeholder values — edit config.js with your Supabase Project URL and anon key before this will work.</p>
+  </div>
+</div>
+
+<!-- ==================== APP VIEW ==================== -->
+<div id="app-view" class="hidden min-h-screen">
+  <header class="bg-slate-800 text-white sticky top-0 z-20 shadow">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h1 class="font-bold text-sm leading-tight">Futures of Design — Budget & Logistics Tracker</h1>
+        <p class="text-[11px] text-slate-300">ANRF Sanction SSY/2026/000495 &nbsp;|&nbsp; 07–11 September 2026 &nbsp;|&nbsp; IIIT Dharwad</p>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <span id="user-email" class="text-slate-300"></span>
+        <button id="logout-btn" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded">Sign Out</button>
+      </div>
+    </div>
+    <nav class="max-w-6xl mx-auto px-4 flex gap-4 border-t border-slate-700 text-sm overflow-x-auto">
+      <button class="tab-btn active py-2 whitespace-nowrap" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn py-2 whitespace-nowrap" data-tab="expenses">Expenses</button>
+      <button class="tab-btn py-2 whitespace-nowrap" data-tab="procurement">Procurement Checklist</button>
+      <button class="tab-btn py-2 whitespace-nowrap" data-tab="speakers">Speaker Logistics</button>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4">
+
+    <!-- ---------- DASHBOARD TAB ---------- -->
+    <section id="tab-dashboard" class="tab-pane">
+      <div id="dash-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <h2 class="font-semibold text-slate-700 text-sm mb-3">Overall Sanction Utilisation</h2>
+        <div id="dash-overall"></div>
+      </div>
+    </section>
+
+    <!-- ---------- EXPENSES TAB ---------- -->
+    <section id="tab-expenses" class="tab-pane hidden">
+      <div class="bg-white rounded-xl shadow p-4 mb-4">
+        <h2 class="font-semibold text-slate-700 text-sm mb-3">Add Expense</h2>
+        <form id="expense-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div><label class="text-xs text-slate-500 block mb-1">Date</label><input type="date" id="exp-date" required class="w-full"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Budget Head</label><select id="exp-head" required class="w-full"></select></div>
+          <div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Description</label><input type="text" id="exp-desc" required class="w-full" placeholder="e.g. Projector purchase"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Vendor</label><input type="text" id="exp-vendor" class="w-full"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Amount (Rs.)</label><input type="number" step="0.01" id="exp-amount" required class="w-full"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Status</label>
+            <select id="exp-status" class="w-full">
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+              <option value="reimbursed">Reimbursed</option>
+            </select>
+          </div>
+          <div><label class="text-xs text-slate-500 block mb-1">Payment Mode</label><input type="text" id="exp-mode" class="w-full" placeholder="PFMS / Cash / Card"></div>
+          <div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Notes</label><input type="text" id="exp-notes" class="w-full"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Receipt (optional)</label><input type="file" id="exp-receipt" accept="image/*,.pdf" class="w-full text-xs"></div>
+          <div class="flex items-end"><button type="submit" class="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-slate-700 w-full">Save Expense</button></div>
+        </form>
+        <p id="expense-form-msg" class="text-xs mt-2"></p>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-slate-700 text-sm">Expense Log</h2>
+          <span id="expense-count" class="text-xs text-slate-400"></span>
+        </div>
+        <div class="scrollx">
+          <table class="data-tbl w-full" id="expense-table">
+            <thead><tr>
+              <th>Date</th><th>Head</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Receipt</th><th></th>
+            </tr></thead>
+            <tbody id="expense-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- PROCUREMENT TAB ---------- -->
+    <section id="tab-procurement" class="tab-pane hidden">
+      <div class="bg-white rounded-xl shadow p-4 mb-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-semibold text-slate-700 text-sm">Procurement Checklist (from the Procurement Request Letter)</h2>
+          <span id="procurement-progress" class="text-xs font-semibold text-slate-600"></span>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="scrollx">
+          <table class="data-tbl w-full" id="procurement-table">
+            <thead><tr>
+              <th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th>
+            </tr></thead>
+            <tbody id="procurement-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- SPEAKERS TAB ---------- -->
+    <section id="tab-speakers" class="tab-pane hidden">
+      <div class="bg-white rounded-xl shadow p-4">
+        <h2 class="font-semibold text-slate-700 text-sm mb-3">Speaker Travel & Accommodation Logistics</h2>
+        <div class="scrollx">
+          <table class="data-tbl w-full" id="speakers-table">
+            <thead><tr>
+              <th>Speaker</th><th>Confirmed Date</th><th>Travel Booked</th><th>Travel Details</th><th>Accommodation Booked</th><th>Accommodation Details</th><th>Arrival</th><th>Departure</th><th>Notes</th>
+            </tr></thead>
+            <tbody id="speakers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ============================================================================
+// SETUP CHECK
+// ============================================================================
+const CFG = window.SUPABASE_CONFIG || {};
+const isConfigured = CFG.url && !CFG.url.includes("YOUR-PROJECT-REF") && CFG.anonKey && !CFG.anonKey.includes("YOUR-ANON");
+if (!isConfigured) document.getElementById("config-warning").classList.remove("hidden");
+
+const sb = isConfigured ? supabase.createClient(CFG.url, CFG.anonKey) : null;
+
+// ============================================================================
+// AUTH
+// ============================================================================
+const loginView = document.getElementById("login-view");
+const appView = document.getElementById("app-view");
+const loginForm = document.getElementById("login-form");
+const loginError = document.getElementById("login-error");
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  loginError.classList.add("hidden");
+  if (!sb) { showLoginError("App is not configured yet — edit config.js first."); return; }
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) showLoginError(error.message);
+});
+
+function showLoginError(msg) {
+  loginError.textContent = msg;
+  loginError.classList.remove("hidden");
+}
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  await sb.auth.signOut();
+});
+
+if (sb) {
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      loginView.classList.add("hidden");
+      appView.classList.remove("hidden");
+      document.getElementById("user-email").textContent = session.user.email;
+      initApp();
+    } else {
+      appView.classList.add("hidden");
+      loginView.classList.remove("hidden");
+    }
+  });
+}
+
+// ============================================================================
+// TABS
+// ============================================================================
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+    document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+  });
+});
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+const fmtRs = (n) => "Rs. " + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const escapeHtml = (s) => (s ?? "").toString().replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let appInitialised = false;
+let budgetHeadsCache = [];
+
+async function initApp() {
+  if (appInitialised) { refreshAll(); return; }
+  appInitialised = true;
+  await loadBudgetHeads();
+  await refreshAll();
+  subscribeRealtime();
+}
+
+async function loadBudgetHeads() {
+  const { data, error } = await sb.from("budget_heads").select("*").order("id");
+  if (error) { console.error(error); return; }
+  budgetHeadsCache = data || [];
+  const headSelect = document.getElementById("exp-head");
+  headSelect.innerHTML = budgetHeadsCache.map(h => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join("");
+}
+
+async function refreshAll() {
+  await Promise.all([renderDashboard(), renderExpenses(), renderProcurement(), renderSpeakers()]);
+}
+
+function subscribeRealtime() {
+  sb.channel("public:expenses").on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => { renderDashboard(); renderExpenses(); }).subscribe();
+  sb.channel("public:procurement_items").on("postgres_changes", { event: "*", schema: "public", table: "procurement_items" }, renderProcurement).subscribe();
+  sb.channel("public:speakers").on("postgres_changes", { event: "*", schema: "public", table: "speakers" }, renderSpeakers).subscribe();
+}
+
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+async function renderDashboard() {
+  const { data: expenses, error } = await sb.from("expenses").select("budget_head_id, amount, status");
+  if (error) { console.error(error); return; }
+
+  const cardsEl = document.getElementById("dash-cards");
+  let totalSanctioned = 0, totalSpent = 0, totalPending = 0;
+
+  cardsEl.innerHTML = budgetHeadsCache.map(head => {
+    const rows = expenses.filter(e => e.budget_head_id === head.id);
+    const spent = rows.filter(r => r.status === "paid" || r.status === "reimbursed").reduce((s, r) => s + Number(r.amount), 0);
+    const pending = rows.filter(r => r.status === "pending").reduce((s, r) => s + Number(r.amount), 0);
+    const pct = head.sanctioned_amount > 0 ? Math.min(100, (spent / head.sanctioned_amount) * 100) : 0;
+    const overPct = ((spent + pending) / head.sanctioned_amount) * 100;
+    const barColor = overPct > 100 ? "bg-red-500" : overPct > 85 ? "bg-amber-500" : "bg-emerald-500";
+    totalSanctioned += Number(head.sanctioned_amount);
+    totalSpent += spent;
+    totalPending += pending;
+    return `
+      <div class="bg-white rounded-xl shadow p-4">
+        <h3 class="text-xs font-semibold text-slate-500 mb-1">${escapeHtml(head.name)}</h3>
+        <p class="text-xl font-bold text-slate-800">${fmtRs(spent)} <span class="text-xs font-normal text-slate-400">/ ${fmtRs(head.sanctioned_amount)}</span></p>
+        <div class="w-full bg-slate-100 rounded-full h-2 mt-2 mb-1">
+          <div class="${barColor} h-2 rounded-full" style="width:${Math.min(100, overPct)}%"></div>
+        </div>
+        <p class="text-[11px] text-slate-400">Pending: ${fmtRs(pending)} &nbsp;|&nbsp; Balance: ${fmtRs(head.sanctioned_amount - spent - pending)}</p>
+      </div>`;
+  }).join("");
+
+  const overallEl = document.getElementById("dash-overall");
+  const overallPct = totalSanctioned > 0 ? ((totalSpent + totalPending) / totalSanctioned) * 100 : 0;
+  const overallColor = overallPct > 100 ? "bg-red-500" : overallPct > 85 ? "bg-amber-500" : "bg-emerald-500";
+  overallEl.innerHTML = `
+    <p class="text-2xl font-bold text-slate-800">${fmtRs(totalSpent)} <span class="text-sm font-normal text-slate-400">spent of ${fmtRs(totalSanctioned)} sanctioned</span></p>
+    <div class="w-full bg-slate-100 rounded-full h-3 mt-2 mb-1">
+      <div class="${overallColor} h-3 rounded-full" style="width:${Math.min(100, overallPct)}%"></div>
+    </div>
+    <p class="text-xs text-slate-400">Pending/committed: ${fmtRs(totalPending)} &nbsp;|&nbsp; Balance remaining: ${fmtRs(totalSanctioned - totalSpent - totalPending)}</p>
+  `;
+}
+
+// ============================================================================
+// EXPENSES
+// ============================================================================
+document.getElementById("expense-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById("expense-form-msg");
+  msgEl.textContent = "Saving...";
+  msgEl.className = "text-xs mt-2 text-slate-500";
+
+  let receiptUrl = null;
+  const file = document.getElementById("exp-receipt").files[0];
+  if (file) {
+    const path = `${Date.now()}_${file.name}`;
+    const { error: upErr } = await sb.storage.from("receipts").upload(path, file);
+    if (upErr) { msgEl.textContent = "Receipt upload failed: " + upErr.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+    receiptUrl = path;
+  }
+
+  const payload = {
+    budget_head_id: Number(document.getElementById("exp-head").value),
+    expense_date: document.getElementById("exp-date").value,
+    description: document.getElementById("exp-desc").value,
+    vendor: document.getElementById("exp-vendor").value || null,
+    amount: Number(document.getElementById("exp-amount").value),
+    status: document.getElementById("exp-status").value,
+    payment_mode: document.getElementById("exp-mode").value || null,
+    notes: document.getElementById("exp-notes").value || null,
+    receipt_url: receiptUrl,
+  };
+  const { error } = await sb.from("expenses").insert(payload);
+  if (error) { msgEl.textContent = "Error: " + error.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+  msgEl.textContent = "Saved ✓";
+  msgEl.className = "text-xs mt-2 text-emerald-600";
+  e.target.reset();
+  document.getElementById("exp-date").value = new Date().toISOString().slice(0, 10);
+  renderExpenses();
+  renderDashboard();
+});
+
+async function renderExpenses() {
+  const { data, error } = await sb.from("expenses").select("*").order("expense_date", { ascending: false });
+  if (error) { console.error(error); return; }
+  document.getElementById("expense-count").textContent = data.length + " entries";
+  const headById = Object.fromEntries(budgetHeadsCache.map(h => [h.id, h.name]));
+
+  const rowsHtml = await Promise.all(data.map(async (r) => {
+    let receiptLink = "—";
+    if (r.receipt_url) {
+      const { data: signed } = await sb.storage.from("receipts").createSignedUrl(r.receipt_url, 3600);
+      if (signed) receiptLink = `<a href="${signed.signedUrl}" target="_blank" class="text-blue-600 underline">View</a>`;
+    }
+    return `<tr>
+      <td>${r.expense_date}</td>
+      <td>${escapeHtml(headById[r.budget_head_id] || "—")}</td>
+      <td>${escapeHtml(r.description)}</td>
+      <td>${escapeHtml(r.vendor)}</td>
+      <td class="font-semibold">${fmtRs(r.amount)}</td>
+      <td><select class="exp-status-select text-xs" data-id="${r.id}">
+            <option value="pending" ${r.status === "pending" ? "selected" : ""}>Pending</option>
+            <option value="paid" ${r.status === "paid" ? "selected" : ""}>Paid</option>
+            <option value="reimbursed" ${r.status === "reimbursed" ? "selected" : ""}>Reimbursed</option>
+          </select></td>
+      <td>${receiptLink}</td>
+      <td><button class="exp-delete text-red-500 text-xs" data-id="${r.id}">Delete</button></td>
+    </tr>`;
+  }));
+  document.getElementById("expense-tbody").innerHTML = rowsHtml.join("");
+
+  document.querySelectorAll(".exp-status-select").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      await sb.from("expenses").update({ status: sel.value }).eq("id", sel.dataset.id);
+      renderDashboard();
+    });
+  });
+  document.querySelectorAll(".exp-delete").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Delete this expense entry?")) return;
+      await sb.from("expenses").delete().eq("id", btn.dataset.id);
+      renderExpenses();
+      renderDashboard();
+    });
+  });
+}
+document.getElementById("exp-date").value = new Date().toISOString().slice(0, 10);
+
+// ============================================================================
+// PROCUREMENT CHECKLIST
+// ============================================================================
+async function renderProcurement() {
+  const { data, error } = await sb.from("procurement_items").select("*, budget_heads(name)").order("budget_head_id").order("id");
+  if (error) { console.error(error); return; }
+  const delivered = data.filter(d => d.status === "delivered").length;
+  document.getElementById("procurement-progress").textContent = `${delivered} / ${data.length} delivered`;
+
+  document.getElementById("procurement-tbody").innerHTML = data.map(item => `
+    <tr>
+      <td class="text-xs text-slate-500">${escapeHtml(item.budget_heads?.name || "")}</td>
+      <td>${escapeHtml(item.item_name)}</td>
+      <td>${fmtRs(item.approx_price)}</td>
+      <td><input type="number" step="0.01" class="proc-actual w-24" data-id="${item.id}" value="${item.actual_price ?? ""}" placeholder="—"></td>
+      <td><input type="text" class="proc-vendor w-28" data-id="${item.id}" value="${escapeHtml(item.vendor || "")}" placeholder="—"></td>
+      <td><select class="proc-status text-xs" data-id="${item.id}">
+            <option value="pending" ${item.status === "pending" ? "selected" : ""}>Pending</option>
+            <option value="ordered" ${item.status === "ordered" ? "selected" : ""}>Ordered</option>
+            <option value="delivered" ${item.status === "delivered" ? "selected" : ""}>Delivered</option>
+          </select></td>
+      <td><input type="text" class="proc-notes w-32" data-id="${item.id}" value="${escapeHtml(item.notes || "")}" placeholder="—"></td>
+    </tr>`).join("");
+
+  const debouncedUpdate = (() => {
+    let timers = {};
+    return (id, field, value) => {
+      clearTimeout(timers[id + field]);
+      timers[id + field] = setTimeout(() => sb.from("procurement_items").update({ [field]: value }).eq("id", id), 500);
+    };
+  })();
+
+  document.querySelectorAll(".proc-status").forEach(el => el.addEventListener("change", () => sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id).then(renderProcurement)));
+  document.querySelectorAll(".proc-actual").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "actual_price", el.value ? Number(el.value) : null)));
+  document.querySelectorAll(".proc-vendor").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "vendor", el.value)));
+  document.querySelectorAll(".proc-notes").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "notes", el.value)));
+}
+
+// ============================================================================
+// SPEAKERS
+// ============================================================================
+async function renderSpeakers() {
+  const { data, error } = await sb.from("speakers").select("*").order("id");
+  if (error) { console.error(error); return; }
+
+  document.getElementById("speakers-tbody").innerHTML = data.map(s => `
+    <tr>
+      <td><span class="font-semibold">${escapeHtml(s.name)}</span><br><span class="text-[11px] text-slate-400">${escapeHtml(s.institute || "")}</span></td>
+      <td class="text-xs">${escapeHtml(s.confirmed_date)}</td>
+      <td class="text-center"><input type="checkbox" class="spk-travel" data-id="${s.id}" ${s.travel_booked ? "checked" : ""}></td>
+      <td><input type="text" class="spk-travel-details w-32" data-id="${s.id}" value="${escapeHtml(s.travel_details || "")}" placeholder="Flight / train details"></td>
+      <td class="text-center"><input type="checkbox" class="spk-accom" data-id="${s.id}" ${s.accommodation_booked ? "checked" : ""}></td>
+      <td><input type="text" class="spk-accom-details w-32" data-id="${s.id}" value="${escapeHtml(s.accommodation_details || "")}" placeholder="Hotel / guest house"></td>
+      <td><input type="datetime-local" class="spk-arrival w-40" data-id="${s.id}" value="${s.arrival_datetime ? s.arrival_datetime.slice(0, 16) : ""}"></td>
+      <td><input type="datetime-local" class="spk-departure w-40" data-id="${s.id}" value="${s.departure_datetime ? s.departure_datetime.slice(0, 16) : ""}"></td>
+      <td><input type="text" class="spk-notes w-32" data-id="${s.id}" value="${escapeHtml(s.notes || "")}" placeholder="—"></td>
+    </tr>`).join("");
+
+  const debouncedUpdate = (() => {
+    let timers = {};
+    return (id, field, value) => {
+      clearTimeout(timers[id + field]);
+      timers[id + field] = setTimeout(() => sb.from("speakers").update({ [field]: value }).eq("id", id), 500);
+    };
+  })();
+
+  document.querySelectorAll(".spk-travel").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ travel_booked: el.checked }).eq("id", el.dataset.id)));
+  document.querySelectorAll(".spk-accom").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ accommodation_booked: el.checked }).eq("id", el.dataset.id)));
+  document.querySelectorAll(".spk-travel-details").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "travel_details", el.value)));
+  document.querySelectorAll(".spk-accom-details").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "accommodation_details", el.value)));
+  document.querySelectorAll(".spk-notes").forEach(el => el.addEventListener("input", () => debouncedUpdate(el.dataset.id, "notes", el.value)));
+  document.querySelectorAll(".spk-arrival").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ arrival_datetime: el.value || null }).eq("id", el.dataset.id)));
+  document.querySelectorAll(".spk-departure").forEach(el => el.addEventListener("change", () => sb.from("speakers").update({ departure_datetime: el.value || null }).eq("id", el.dataset.id)));
+}
+</script>
+</body>
+</html>
