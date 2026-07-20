@@ -8,11 +8,19 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <style>
+  :root{
+    --navy:#1e3a5f;
+    --navy-dark:#152a45;
+    --gold:#c08a2e;
+  }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-  .tab-btn.active { border-bottom: 3px solid #1e3a5f; color: #1e3a5f; font-weight: 600; }
-  table.data-tbl th, table.data-tbl td { padding: 8px 10px; font-size: 13px; vertical-align: top; }
-  table.data-tbl th { background: #1e3a5f; color: white; text-align: left; position: sticky; top: 0; }
+  .tab-btn { color:#64748b; transition: color .15s ease, border-color .15s ease; }
+  .tab-btn.active { border-bottom: 3px solid var(--navy); color: var(--navy); font-weight: 600; }
+  .tab-btn:hover:not(.active) { color: #334155; }
+  table.data-tbl th, table.data-tbl td { padding: 9px 10px; font-size: 13px; vertical-align: top; }
+  table.data-tbl th { background: var(--navy); color: white; text-align: left; position: sticky; top: 0; font-weight: 600; letter-spacing:.02em; }
   table.data-tbl tr:nth-child(even) { background: #f5f7fa; }
+  table.data-tbl tr:hover { background: #eef2f7; }
   .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
   .badge-pending { background: #fef3c7; color: #92400e; }
   .badge-paid { background: #d1fae5; color: #065f46; }
@@ -20,142 +28,191 @@
   .badge-ordered { background: #e0e7ff; color: #3730a3; }
   .badge-delivered { background: #d1fae5; color: #065f46; }
   .scrollx { overflow-x: auto; }
-  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: #1e3a5f; }
+  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; transition: border-color .15s ease, box-shadow .15s ease; background:#fff; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,58,95,0.12); }
+  ::placeholder { color:#94a3b8; }
+  .auth-toggle-btn { color:#64748b; transition: color .15s ease; }
+  .auth-toggle-btn.active { color: var(--navy); font-weight:700; }
+  .btn-primary { background: var(--navy); }
+  .btn-primary:hover { background: var(--navy-dark); }
+  .skeleton { background: linear-gradient(90deg,#eef1f5 25%,#f7f9fb 37%,#eef1f5 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+  @keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:0 0} }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
 
-<!-- ==================== LOGIN VIEW ==================== -->
-<div id="login-view" class="min-h-screen flex items-center justify-center px-4">
-  <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
-    <h1 class="text-lg font-bold text-slate-800 mb-1">Futures of Design</h1>
-    <p class="text-xs text-slate-500 mb-6">Workshop Budget & Logistics Tracker — 07–11 Sept 2026</p>
-    <div id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 mb-3"></div>
-    <form id="login-form" class="space-y-3">
-      <div>
-        <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
-        <input type="email" id="login-email" required class="w-full" placeholder="you@iiitdwd.ac.in" />
-      </div>
-      <div>
-        <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
-        <input type="password" id="login-password" required class="w-full" placeholder="••••••••" />
-      </div>
-      <button type="submit" class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm font-semibold hover:bg-slate-700">Sign In</button>
-    </form>
-    <p class="text-[11px] text-slate-400 mt-4">No account? Ask the Convener to create one for you in the Supabase dashboard (Authentication → Users).</p>
-    <p id="config-warning" class="hidden text-[11px] text-red-500 mt-3 border-t pt-3">⚠ config.js still has placeholder values — edit config.js with your Supabase Project URL and anon key before this will work.</p>
+<!-- ==================== LOGIN / SIGNUP VIEW ==================== -->
+<div id="login-view" class="min-h-screen flex items-center justify-center px-4 py-10">
+<div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm border border-slate-200">
+  <div class="flex items-center gap-3 mb-1">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold" style="background:var(--navy)">FD</div>
+    <div>
+      <h1 class="text-base font-bold text-slate-800 leading-tight">Futures of Design</h1>
+      <p class="text-[11px] text-slate-500">Budget & Logistics Tracker</p>
+    </div>
   </div>
+  <p class="text-[11px] text-slate-400 mb-6">ANRF Workshop &middot; 07–11 Sept 2026 &middot; IIIT Dharwad</p>
+
+  <!-- Toggle -->
+  <div class="flex gap-4 border-b border-slate-200 mb-5 text-sm">
+    <button id="show-login-btn" class="auth-toggle-btn active pb-2">Sign In</button>
+    <button id="show-signup-btn" class="auth-toggle-btn pb-2">Create Account</button>
+  </div>
+
+  <div id="auth-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3"></div>
+  <div id="auth-success" class="hidden text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mb-3"></div>
+
+  <!-- Sign In form -->
+  <form id="login-form" class="space-y-3">
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
+      <input type="email" id="login-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" />
+    </div>
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
+      <input type="password" id="login-password" required class="w-full" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button type="submit" id="login-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Sign In</button>
+  </form>
+
+  <!-- Create Account form -->
+  <form id="signup-form" class="space-y-3 hidden">
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Full name</label>
+      <input type="text" id="signup-name" required class="w-full" placeholder="e.g. Sandesh Phalke" autocomplete="name" />
+    </div>
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Email</label>
+      <input type="email" id="signup-email" required class="w-full" placeholder="you@iiitdwd.ac.in" autocomplete="email" />
+    </div>
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Password</label>
+      <input type="password" id="signup-password" required minlength="6" class="w-full" placeholder="At least 6 characters" autocomplete="new-password" />
+    </div>
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1">Confirm password</label>
+      <input type="password" id="signup-password2" required minlength="6" class="w-full" placeholder="Re-enter password" autocomplete="new-password" />
+    </div>
+    <button type="submit" id="signup-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Create Account</button>
+  </form>
+
+  <p id="config-warning" class="hidden text-[11px] text-red-500 mt-4 border-t pt-3">⚠ config.js still has placeholder values — edit config.js with your Supabase Project URL and anon key before this will work.</p>
+</div>
 </div>
 
 <!-- ==================== APP VIEW ==================== -->
 <div id="app-view" class="hidden min-h-screen">
-  <header class="bg-slate-800 text-white sticky top-0 z-20 shadow">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-      <div>
-        <h1 class="font-bold text-sm leading-tight">Futures of Design — Budget & Logistics Tracker</h1>
-        <p class="text-[11px] text-slate-300">ANRF Sanction SSY/2026/000495 &nbsp;|&nbsp; 07–11 September 2026 &nbsp;|&nbsp; IIIT Dharwad</p>
-      </div>
-      <div class="flex items-center gap-3 text-xs">
-        <span id="user-email" class="text-slate-300"></span>
-        <button id="logout-btn" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded">Sign Out</button>
-      </div>
-    </div>
-    <nav class="max-w-6xl mx-auto px-4 flex gap-4 border-t border-slate-700 text-sm overflow-x-auto">
-      <button class="tab-btn active py-2 whitespace-nowrap" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn py-2 whitespace-nowrap" data-tab="expenses">Expenses</button>
-      <button class="tab-btn py-2 whitespace-nowrap" data-tab="procurement">Procurement Checklist</button>
-      <button class="tab-btn py-2 whitespace-nowrap" data-tab="speakers">Speaker Logistics</button>
-    </nav>
-  </header>
+<header class="bg-slate-800 text-white sticky top-0 z-20 shadow" style="background:var(--navy)">
+<div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+<div>
+<h1 class="font-bold text-sm leading-tight">Futures of Design — Budget & Logistics Tracker</h1>
+<p class="text-[11px] text-slate-300">ANRF Sanction SSY/2026/000495 &nbsp;|&nbsp; 07–11 September 2026 &nbsp;|&nbsp; IIIT Dharwad</p>
+</div>
+<div class="flex items-center gap-3 text-xs">
+<span id="user-email" class="text-slate-300"></span>
+<button id="logout-btn" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors">Sign Out</button>
+</div>
+</div>
+<nav class="max-w-6xl mx-auto px-4 flex gap-4 border-t border-white/10 text-sm overflow-x-auto bg-white">
+<button class="tab-btn active py-2.5 whitespace-nowrap" data-tab="dashboard">Dashboard</button>
+<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="expenses">Expenses</button>
+<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="procurement">Procurement Checklist</button>
+<button class="tab-btn py-2.5 whitespace-nowrap" data-tab="speakers">Speaker Logistics</button>
+</nav>
+</header>
 
-  <main class="max-w-6xl mx-auto p-4">
+<main class="max-w-6xl mx-auto p-4">
 
-    <!-- ---------- DASHBOARD TAB ---------- -->
-    <section id="tab-dashboard" class="tab-pane">
-      <div id="dash-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
-      <div class="bg-white rounded-xl shadow p-4">
-        <h2 class="font-semibold text-slate-700 text-sm mb-3">Overall Sanction Utilisation</h2>
-        <div id="dash-overall"></div>
-      </div>
-    </section>
+<!-- ---------- DASHBOARD TAB ---------- -->
+<section id="tab-dashboard" class="tab-pane">
+<div id="dash-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
+<div class="bg-white rounded-xl shadow p-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Overall Sanction Utilisation</h2>
+<div id="dash-overall"></div>
+</div>
+</section>
 
-    <!-- ---------- EXPENSES TAB ---------- -->
-    <section id="tab-expenses" class="tab-pane hidden">
-      <div class="bg-white rounded-xl shadow p-4 mb-4">
-        <h2 class="font-semibold text-slate-700 text-sm mb-3">Add Expense</h2>
-        <form id="expense-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div><label class="text-xs text-slate-500 block mb-1">Date</label><input type="date" id="exp-date" required class="w-full"></div>
-          <div><label class="text-xs text-slate-500 block mb-1">Budget Head</label><select id="exp-head" required class="w-full"></select></div>
-          <div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Description</label><input type="text" id="exp-desc" required class="w-full" placeholder="e.g. Projector purchase"></div>
-          <div><label class="text-xs text-slate-500 block mb-1">Vendor</label><input type="text" id="exp-vendor" class="w-full"></div>
-          <div><label class="text-xs text-slate-500 block mb-1">Amount (Rs.)</label><input type="number" step="0.01" id="exp-amount" required class="w-full"></div>
-          <div><label class="text-xs text-slate-500 block mb-1">Status</label>
-            <select id="exp-status" class="w-full">
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="reimbursed">Reimbursed</option>
-            </select>
-          </div>
-          <div><label class="text-xs text-slate-500 block mb-1">Payment Mode</label><input type="text" id="exp-mode" class="w-full" placeholder="PFMS / Cash / Card"></div>
-          <div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Notes</label><input type="text" id="exp-notes" class="w-full"></div>
-          <div><label class="text-xs text-slate-500 block mb-1">Receipt (optional)</label><input type="file" id="exp-receipt" accept="image/*,.pdf" class="w-full text-xs"></div>
-          <div class="flex items-end"><button type="submit" class="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-slate-700 w-full">Save Expense</button></div>
-        </form>
-        <p id="expense-form-msg" class="text-xs mt-2"></p>
-      </div>
-      <div class="bg-white rounded-xl shadow p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-semibold text-slate-700 text-sm">Expense Log</h2>
-          <span id="expense-count" class="text-xs text-slate-400"></span>
-        </div>
-        <div class="scrollx">
-          <table class="data-tbl w-full" id="expense-table">
-            <thead><tr>
-              <th>Date</th><th>Head</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Receipt</th><th></th>
-            </tr></thead>
-            <tbody id="expense-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+<!-- ---------- EXPENSES TAB ---------- -->
+<section id="tab-expenses" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Add Expense</h2>
+<form id="expense-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+<div><label class="text-xs text-slate-500 block mb-1">Date</label><input type="date" id="exp-date" required class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Budget Head</label><select id="exp-head" required class="w-full"></select></div>
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Description</label><input type="text" id="exp-desc" required class="w-full" placeholder="e.g. Projector purchase"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Vendor</label><input type="text" id="exp-vendor" class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Amount (Rs.)</label><input type="number" step="0.01" id="exp-amount" required class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Status</label>
+<select id="exp-status" class="w-full">
+<option value="pending">Pending</option>
+<option value="paid">Paid</option>
+<option value="reimbursed">Reimbursed</option>
+</select>
+</div>
+<div><label class="text-xs text-slate-500 block mb-1">Payment Mode</label><input type="text" id="exp-mode" class="w-full" placeholder="PFMS / Cash / Card"></div>
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Notes</label><input type="text" id="exp-notes" class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Receipt (optional)</label><input type="file" id="exp-receipt" accept="image/*,.pdf" class="w-full text-xs"></div>
+<div class="flex items-end"><button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold w-full transition-colors">Save Expense</button></div>
+</form>
+<p id="expense-form-msg" class="text-xs mt-2"></p>
+</div>
+<div class="bg-white rounded-xl shadow p-4">
+<div class="flex items-center justify-between mb-3">
+<h2 class="font-semibold text-slate-700 text-sm">Expense Log</h2>
+<span id="expense-count" class="text-xs text-slate-400"></span>
+</div>
+<div class="scrollx">
+<table class="data-tbl w-full" id="expense-table">
+<thead><tr>
+<th>Date</th><th>Head</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Receipt</th><th></th>
+</tr></thead>
+<tbody id="expense-tbody"></tbody>
+</table>
+<p id="expense-empty" class="hidden text-xs text-slate-400 text-center py-6">No expenses logged yet — add your first one above.</p>
+</div>
+</div>
+</section>
 
-    <!-- ---------- PROCUREMENT TAB ---------- -->
-    <section id="tab-procurement" class="tab-pane hidden">
-      <div class="bg-white rounded-xl shadow p-4 mb-4">
-        <div class="flex items-center justify-between flex-wrap gap-2">
-          <h2 class="font-semibold text-slate-700 text-sm">Procurement Checklist (from the Procurement Request Letter)</h2>
-          <span id="procurement-progress" class="text-xs font-semibold text-slate-600"></span>
-        </div>
-      </div>
-      <div class="bg-white rounded-xl shadow p-4">
-        <div class="scrollx">
-          <table class="data-tbl w-full" id="procurement-table">
-            <thead><tr>
-              <th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th>
-            </tr></thead>
-            <tbody id="procurement-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+<!-- ---------- PROCUREMENT TAB ---------- -->
+<section id="tab-procurement" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<h2 class="font-semibold text-slate-700 text-sm">Procurement Checklist (from the Procurement Request Letter)</h2>
+<span id="procurement-progress" class="text-xs font-semibold text-slate-600"></span>
+</div>
+<div class="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+  <div id="procurement-progress-bar" class="h-1.5 rounded-full bg-emerald-500" style="width:0%"></div>
+</div>
+</div>
+<div class="bg-white rounded-xl shadow p-4">
+<div class="scrollx">
+<table class="data-tbl w-full" id="procurement-table">
+<thead><tr>
+<th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th>
+</tr></thead>
+<tbody id="procurement-tbody"></tbody>
+</table>
+</div>
+</div>
+</section>
 
-    <!-- ---------- SPEAKERS TAB ---------- -->
-    <section id="tab-speakers" class="tab-pane hidden">
-      <div class="bg-white rounded-xl shadow p-4">
-        <h2 class="font-semibold text-slate-700 text-sm mb-3">Speaker Travel & Accommodation Logistics</h2>
-        <div class="scrollx">
-          <table class="data-tbl w-full" id="speakers-table">
-            <thead><tr>
-              <th>Speaker</th><th>Confirmed Date</th><th>Travel Booked</th><th>Travel Details</th><th>Accommodation Booked</th><th>Accommodation Details</th><th>Arrival</th><th>Departure</th><th>Notes</th>
-            </tr></thead>
-            <tbody id="speakers-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+<!-- ---------- SPEAKERS TAB ---------- -->
+<section id="tab-speakers" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Speaker Travel & Accommodation Logistics</h2>
+<div class="scrollx">
+<table class="data-tbl w-full" id="speakers-table">
+<thead><tr>
+<th>Speaker</th><th>Confirmed Date</th><th>Travel Booked</th><th>Travel Details</th><th>Accommodation Booked</th><th>Accommodation Details</th><th>Arrival</th><th>Departure</th><th>Notes</th>
+</tr></thead>
+<tbody id="speakers-tbody"></tbody>
+</table>
+</div>
+</div>
+</section>
 
-  </main>
+</main>
 </div>
 
 <script>
@@ -169,27 +226,99 @@ if (!isConfigured) document.getElementById("config-warning").classList.remove("h
 const sb = isConfigured ? supabase.createClient(CFG.url, CFG.anonKey) : null;
 
 // ============================================================================
-// AUTH
+// AUTH — sign in / sign up toggle
 // ============================================================================
 const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
 const loginForm = document.getElementById("login-form");
-const loginError = document.getElementById("login-error");
+const signupForm = document.getElementById("signup-form");
+const authError = document.getElementById("auth-error");
+const authSuccess = document.getElementById("auth-success");
+const showLoginBtn = document.getElementById("show-login-btn");
+const showSignupBtn = document.getElementById("show-signup-btn");
+
+function clearAuthMessages() {
+  authError.classList.add("hidden");
+  authSuccess.classList.add("hidden");
+}
+
+showLoginBtn.addEventListener("click", () => {
+  showLoginBtn.classList.add("active");
+  showSignupBtn.classList.remove("active");
+  loginForm.classList.remove("hidden");
+  signupForm.classList.add("hidden");
+  clearAuthMessages();
+});
+
+showSignupBtn.addEventListener("click", () => {
+  showSignupBtn.classList.add("active");
+  showLoginBtn.classList.remove("active");
+  signupForm.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+  clearAuthMessages();
+});
+
+function showAuthError(msg) {
+  authSuccess.classList.add("hidden");
+  authError.textContent = msg;
+  authError.classList.remove("hidden");
+}
+
+function showAuthSuccess(msg) {
+  authError.classList.add("hidden");
+  authSuccess.textContent = msg;
+  authSuccess.classList.remove("hidden");
+}
 
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  loginError.classList.add("hidden");
-  if (!sb) { showLoginError("App is not configured yet — edit config.js first."); return; }
+  clearAuthMessages();
+  if (!sb) { showAuthError("App is not configured yet — edit config.js first."); return; }
+  const btn = document.getElementById("login-submit-btn");
+  btn.disabled = true; btn.textContent = "Signing in…";
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
   const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) showLoginError(error.message);
+  btn.disabled = false; btn.textContent = "Sign In";
+  if (error) showAuthError(error.message);
 });
 
-function showLoginError(msg) {
-  loginError.textContent = msg;
-  loginError.classList.remove("hidden");
-}
+signupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearAuthMessages();
+  if (!sb) { showAuthError("App is not configured yet — edit config.js first."); return; }
+
+  const name = document.getElementById("signup-name").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const password2 = document.getElementById("signup-password2").value;
+
+  if (password !== password2) { showAuthError("Passwords don't match."); return; }
+  if (password.length < 6) { showAuthError("Password must be at least 6 characters."); return; }
+
+  const btn = document.getElementById("signup-submit-btn");
+  btn.disabled = true; btn.textContent = "Creating account…";
+
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } }
+  });
+
+  btn.disabled = false; btn.textContent = "Create Account";
+
+  if (error) { showAuthError(error.message); return; }
+
+  // If the project requires email confirmation, there will be no active session yet.
+  if (data.session) {
+    // Auto-confirmed — onAuthStateChange will take over and log them in.
+    showAuthSuccess("Account created — signing you in…");
+  } else {
+    showAuthSuccess("Account created. Check your email to confirm, then sign in.");
+    signupForm.reset();
+    showLoginBtn.click();
+  }
+});
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
   await sb.auth.signOut();
@@ -270,18 +399,17 @@ async function renderDashboard() {
     const rows = expenses.filter(e => e.budget_head_id === head.id);
     const spent = rows.filter(r => r.status === "paid" || r.status === "reimbursed").reduce((s, r) => s + Number(r.amount), 0);
     const pending = rows.filter(r => r.status === "pending").reduce((s, r) => s + Number(r.amount), 0);
-    const pct = head.sanctioned_amount > 0 ? Math.min(100, (spent / head.sanctioned_amount) * 100) : 0;
-    const overPct = ((spent + pending) / head.sanctioned_amount) * 100;
+    const overPct = head.sanctioned_amount > 0 ? ((spent + pending) / head.sanctioned_amount) * 100 : 0;
     const barColor = overPct > 100 ? "bg-red-500" : overPct > 85 ? "bg-amber-500" : "bg-emerald-500";
     totalSanctioned += Number(head.sanctioned_amount);
     totalSpent += spent;
     totalPending += pending;
     return `
-      <div class="bg-white rounded-xl shadow p-4">
+      <div class="bg-white rounded-xl shadow p-4 hover:shadow-md transition-shadow">
         <h3 class="text-xs font-semibold text-slate-500 mb-1">${escapeHtml(head.name)}</h3>
         <p class="text-xl font-bold text-slate-800">${fmtRs(spent)} <span class="text-xs font-normal text-slate-400">/ ${fmtRs(head.sanctioned_amount)}</span></p>
         <div class="w-full bg-slate-100 rounded-full h-2 mt-2 mb-1">
-          <div class="${barColor} h-2 rounded-full" style="width:${Math.min(100, overPct)}%"></div>
+          <div class="${barColor} h-2 rounded-full transition-all" style="width:${Math.min(100, overPct)}%"></div>
         </div>
         <p class="text-[11px] text-slate-400">Pending: ${fmtRs(pending)} &nbsp;|&nbsp; Balance: ${fmtRs(head.sanctioned_amount - spent - pending)}</p>
       </div>`;
@@ -293,7 +421,7 @@ async function renderDashboard() {
   overallEl.innerHTML = `
     <p class="text-2xl font-bold text-slate-800">${fmtRs(totalSpent)} <span class="text-sm font-normal text-slate-400">spent of ${fmtRs(totalSanctioned)} sanctioned</span></p>
     <div class="w-full bg-slate-100 rounded-full h-3 mt-2 mb-1">
-      <div class="${overallColor} h-3 rounded-full" style="width:${Math.min(100, overallPct)}%"></div>
+      <div class="${overallColor} h-3 rounded-full transition-all" style="width:${Math.min(100, overallPct)}%"></div>
     </div>
     <p class="text-xs text-slate-400">Pending/committed: ${fmtRs(totalPending)} &nbsp;|&nbsp; Balance remaining: ${fmtRs(totalSanctioned - totalSpent - totalPending)}</p>
   `;
@@ -342,7 +470,10 @@ async function renderExpenses() {
   const { data, error } = await sb.from("expenses").select("*").order("expense_date", { ascending: false });
   if (error) { console.error(error); return; }
   document.getElementById("expense-count").textContent = data.length + " entries";
+  document.getElementById("expense-empty").classList.toggle("hidden", data.length !== 0);
   const headById = Object.fromEntries(budgetHeadsCache.map(h => [h.id, h.name]));
+
+  const badgeClass = { pending: "badge-pending", paid: "badge-paid", reimbursed: "badge-reimbursed" };
 
   const rowsHtml = await Promise.all(data.map(async (r) => {
     let receiptLink = "—";
@@ -362,7 +493,7 @@ async function renderExpenses() {
             <option value="reimbursed" ${r.status === "reimbursed" ? "selected" : ""}>Reimbursed</option>
           </select></td>
       <td>${receiptLink}</td>
-      <td><button class="exp-delete text-red-500 text-xs" data-id="${r.id}">Delete</button></td>
+      <td><button class="exp-delete text-red-500 text-xs hover:underline" data-id="${r.id}">Delete</button></td>
     </tr>`;
   }));
   document.getElementById("expense-tbody").innerHTML = rowsHtml.join("");
@@ -392,6 +523,7 @@ async function renderProcurement() {
   if (error) { console.error(error); return; }
   const delivered = data.filter(d => d.status === "delivered").length;
   document.getElementById("procurement-progress").textContent = `${delivered} / ${data.length} delivered`;
+  document.getElementById("procurement-progress-bar").style.width = data.length ? `${(delivered / data.length) * 100}%` : "0%";
 
   document.getElementById("procurement-tbody").innerHTML = data.map(item => `
     <tr>
