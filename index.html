@@ -220,8 +220,17 @@
 // SETUP CHECK
 // ============================================================================
 const CFG = window.SUPABASE_CONFIG || {};
-const isConfigured = CFG.url && !CFG.url.includes("YOUR-PROJECT-REF") && CFG.anonKey && !CFG.anonKey.includes("YOUR-ANON");
-if (!isConfigured) document.getElementById("config-warning").classList.remove("hidden");
+const looksLikePlaceholder = (s) => !s || /YOUR-PROJECT-REF|YOUR-ANON|xxxxx|your-project|placeholder/i.test(s);
+const looksLikeValidUrl = (s) => /^https:\/\/[a-z0-9]{15,25}\.supabase\.co\/?$/i.test((s || "").trim());
+const isConfigured = CFG.url && CFG.anonKey && !looksLikePlaceholder(CFG.url) && !looksLikePlaceholder(CFG.anonKey) && looksLikeValidUrl(CFG.url);
+
+if (!isConfigured) {
+  const warningEl = document.getElementById("config-warning");
+  warningEl.classList.remove("hidden");
+  if (CFG.url && !looksLikeValidUrl(CFG.url)) {
+    warningEl.textContent = `⚠ config.js has an invalid Project URL ("${CFG.url}") — it should look like https://abcdefghijklmno.supabase.co, copied exactly from Supabase Settings → API. Edit config.js and fix it.`;
+  }
+}
 
 const sb = isConfigured ? supabase.createClient(CFG.url, CFG.anonKey) : null;
 
