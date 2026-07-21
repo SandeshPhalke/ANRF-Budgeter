@@ -290,6 +290,35 @@
 <div id="events-list" class="space-y-3"></div>
 </section>
 
+<!-- ---------- Q&A (everyone) ---------- -->
+<section id="tab-qa" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Ask a Question</h2>
+<form id="qa-form" class="flex flex-col md:flex-row gap-3">
+<input type="text" id="qa-question" required class="flex-1" placeholder="Type your question for the speakers/organizers…">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">Post Question</button>
+</form>
+<p id="qa-form-msg" class="text-xs mt-2"></p>
+</div>
+<div id="qa-list" class="space-y-3"></div>
+</section>
+
+<!-- ---------- USERS (admin) ---------- -->
+<section id="tab-users" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4">
+<div class="flex items-center justify-between mb-3">
+<h2 class="font-semibold text-slate-700 text-sm">Manage User Roles</h2>
+<span id="users-count" class="text-xs text-slate-400"></span>
+</div>
+<div class="scrollx">
+<table class="data-tbl w-full" id="users-table">
+<thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+<tbody id="users-tbody"></tbody>
+</table>
+</div>
+</div>
+</section>
+
 </main>
 </div>
 
@@ -389,14 +418,15 @@ if (sb) {
 const TABS_BY_ROLE = {
   admin: [
     ["dashboard", "Dashboard"], ["expenses", "Expenses"], ["procurement", "Procurement"],
-    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["alerts", "Alerts"],
-    ["photos", "Photos"], ["events", "Events"]
+    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["qa", "Q&A"], ["alerts", "Alerts"],
+    ["photos", "Photos"], ["events", "Events"], ["users", "Users"]
   ],
-  speaker: [["schedule", "Schedule"], ["photos", "Photos"], ["events", "Events"]],
-  participant: [["schedule", "Schedule"], ["photos", "Photos"], ["events", "Events"]]
+  speaker: [["schedule", "Schedule"], ["qa", "Q&A"], ["photos", "Photos"], ["events", "Events"]],
+  participant: [["schedule", "Schedule"], ["qa", "Q&A"], ["photos", "Photos"], ["events", "Events"]]
 };
 
 const ADMIN_EMAILS = ["s.phalke@iiitdwd.ac.in", "s.phalke2029@gmail.com"];
+
 
 async function loadRoleAndInit() {
   let { data } = await sb.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
@@ -446,9 +476,9 @@ async function refreshAllForRole() {
   await renderAlertBanner();
   if (currentRole === "admin") {
     await loadBudgetHeads();
-    await Promise.all([renderDashboard(), renderExpenses(), loadProcurement(), renderSpeakers()]);
+    await Promise.all([renderDashboard(), renderExpenses(), loadProcurement(), renderSpeakers(), renderUsers()]);
   }
-  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents()]);
+  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents(), renderQA()]);
 }
 
 function subscribeRealtime() {
@@ -459,6 +489,8 @@ function subscribeRealtime() {
   sb.channel("public:alerts").on("postgres_changes", { event: "*", schema: "public", table: "alerts" }, () => { renderAlertBanner(); renderAlertsList(); }).subscribe();
   sb.channel("public:photos").on("postgres_changes", { event: "*", schema: "public", table: "photos" }, renderPhotos).subscribe();
   sb.channel("public:post_events").on("postgres_changes", { event: "*", schema: "public", table: "post_events" }, renderEvents).subscribe();
+  sb.channel("public:questions").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, renderQA).subscribe();
+  sb.channel("public:profiles").on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { if (currentRole === "admin") renderUsers(); }).subscribe();
 }
 
 // ============================================================================
@@ -597,7 +629,29 @@ document.getElementById("exp-date").value = new Date().toISOString().slice(0, 10
 let procurementCache = [];
 let procFilter = { search: "", head: "", status: "" };
 let procSort = { key: "manual", dir: "asc" };
-const procDebouncedUpdate = (() => { let timers = {}; return (id, field, value) => { clearTimeout(timers[id + field]); timers[id + field] = setTimeout(() => sb.from("procurement_items").update({ [field]: value }).eq("id", id), 500); }; })();
+const procDebouncedUpdate = (() => {
+  let timers = {};
+  return (id, field, value) => {
+    clearTimeout(timers[id + field]);
+    timers[id + field] = setTimeout(async () => {
+      const { error } = await sb.from("procurement_items").update({ [field]: value }).eq("id", id);
+      showProcSaveStatus(error ? `Couldn't save ${field.replace("_", " ")}: ${error.message}` : "Saved ✓", !!error);
+    }, 500);
+  };
+})();
+
+function showProcSaveStatus(msg, isError) {
+  let el = document.getElementById("proc-save-status");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "proc-save-status";
+    document.getElementById("proc-manual-hint").insertAdjacentElement("afterend", el);
+  }
+  el.textContent = msg;
+  el.className = "text-xs mb-2 " + (isError ? "text-red-600 font-medium" : "text-emerald-600");
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.textContent = ""; }, isError ? 6000 : 1800);
+}
 
 async function loadProcurement() {
   const { data, error } = await sb.from("procurement_items").select("*, budget_heads(name)").order("sort_order", { ascending: true, nullsFirst: false }).order("id");
@@ -695,12 +749,14 @@ function renderProcurement() {
 
   // Dropdowns: worth a full reload since they can affect grouping/progress.
   document.querySelectorAll(".proc-status").forEach(el => el.addEventListener("change", async () => {
-    await sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id);
+    const { error } = await sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id);
+    if (error) { showProcSaveStatus("Couldn't save status: " + error.message, true); return; }
     const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.status = el.value;
     loadProcurement();
   }));
   document.querySelectorAll(".proc-head").forEach(el => el.addEventListener("change", async () => {
-    await sb.from("procurement_items").update({ budget_head_id: Number(el.value) }).eq("id", el.dataset.id);
+    const { error } = await sb.from("procurement_items").update({ budget_head_id: Number(el.value) }).eq("id", el.dataset.id);
+    if (error) { showProcSaveStatus("Couldn't move item: " + error.message, true); return; }
     const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.budget_head_id = Number(el.value);
     loadProcurement();
   }));
@@ -1027,6 +1083,80 @@ async function renderEvents() {
       ${currentRole === "admin" ? `<button class="event-delete text-red-500 text-xs hover:underline shrink-0" data-id="${ev.id}">Delete</button>` : ""}
     </div>`).join("");
   el.querySelectorAll(".event-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this event?")) return; await sb.from("post_events").delete().eq("id", btn.dataset.id); renderEvents(); }));
+}
+
+// ============================================================================
+// Q&A
+// ============================================================================
+document.getElementById("qa-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById("qa-form-msg");
+  const question = document.getElementById("qa-question").value.trim();
+  if (!question) return;
+  const { error } = await sb.from("questions").insert({ question, asked_by: currentUser.id });
+  msgEl.textContent = error ? "Error: " + error.message : "Posted ✓";
+  msgEl.className = "text-xs mt-2 " + (error ? "text-red-600" : "text-emerald-600");
+  if (!error) e.target.reset();
+  renderQA();
+});
+
+async function renderQA() {
+  const { data, error } = await sb.from("questions").select("*, profiles!questions_asked_by_fkey(full_name,email)").order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const el = document.getElementById("qa-list");
+  if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No questions yet — be the first to ask.</p>`; return; }
+  const canAnswer = currentRole === "admin" || currentRole === "speaker";
+  el.innerHTML = data.map(q => {
+    const askerName = q.profiles?.full_name || q.profiles?.email || "Someone";
+    return `<div class="bg-white rounded-xl shadow p-4">
+      <div class="flex justify-between items-start gap-3">
+        <div>
+          <p class="text-sm text-slate-800 font-medium">${escapeHtml(q.question)}</p>
+          <p class="text-[11px] text-slate-400 mt-1">Asked by ${escapeHtml(askerName)} &middot; ${new Date(q.created_at).toLocaleString()}</p>
+        </div>
+        ${currentRole === "admin" ? `<button class="qa-delete text-red-500 text-xs hover:underline shrink-0" data-id="${q.id}">Delete</button>` : ""}
+      </div>
+      ${q.answer ? `<div class="mt-3 pt-3 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
+          <p class="text-xs text-slate-500 font-semibold mb-1">Answer</p>
+          <p class="text-sm text-slate-700">${escapeHtml(q.answer)}</p>
+        </div>` : canAnswer ? `<div class="mt-3 pt-3 border-t border-slate-100 flex gap-2">
+          <input type="text" class="qa-answer-input flex-1" data-id="${q.id}" placeholder="Type an answer…">
+          <button class="qa-answer-submit btn-primary text-white text-xs rounded-lg px-3 py-1.5" data-id="${q.id}">Answer</button>
+        </div>` : `<p class="text-xs text-slate-400 mt-2">Not answered yet.</p>`}
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".qa-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this question?")) return; await sb.from("questions").delete().eq("id", btn.dataset.id); renderQA(); }));
+  el.querySelectorAll(".qa-answer-submit").forEach(btn => btn.addEventListener("click", async () => {
+    const input = el.querySelector(`.qa-answer-input[data-id="${btn.dataset.id}"]`);
+    const answer = input.value.trim();
+    if (!answer) { alert("Type an answer first."); return; }
+    const { error } = await sb.from("questions").update({ answer, answered_by: currentUser.id }).eq("id", btn.dataset.id);
+    if (error) { alert("Error: " + error.message); return; }
+    renderQA();
+  }));
+}
+
+// ============================================================================
+// USERS (admin — role management, replaces manual SQL)
+// ============================================================================
+async function renderUsers() {
+  const { data, error } = await sb.from("profiles").select("*").order("created_at");
+  if (error) { console.error(error); return; }
+  document.getElementById("users-count").textContent = data.length + " accounts";
+  document.getElementById("users-tbody").innerHTML = data.map(u => `<tr>
+      <td>${escapeHtml(u.full_name || "—")}</td>
+      <td class="text-xs">${escapeHtml(u.email || "—")}</td>
+      <td><select class="user-role-select text-xs" data-id="${u.id}">
+            <option value="participant" ${u.role === "participant" ? "selected" : ""}>Participant</option>
+            <option value="speaker" ${u.role === "speaker" ? "selected" : ""}>Speaker</option>
+            <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
+          </select></td>
+      <td class="text-xs text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
+    </tr>`).join("");
+  document.querySelectorAll(".user-role-select").forEach(sel => sel.addEventListener("change", async () => {
+    const { error } = await sb.from("profiles").update({ role: sel.value }).eq("id", sel.dataset.id);
+    if (error) { alert("Couldn't update role: " + error.message); renderUsers(); return; }
+  }));
 }
 </script>
 </body>
