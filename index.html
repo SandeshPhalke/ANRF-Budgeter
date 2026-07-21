@@ -337,20 +337,39 @@
 <button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold">Send</button>
 </form>
 </div>
+
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<div class="flex items-center justify-between mb-3">
+<h2 class="font-semibold text-slate-700 text-sm">Discussion Groups</h2>
+<button id="group-new-btn" type="button" class="text-xs text-blue-600 hover:underline">+ New Group</button>
+</div>
+<form id="group-form" class="hidden flex flex-col md:flex-row gap-2 mb-3">
+<input type="text" id="group-name" required class="flex-1" placeholder="Group name, e.g. 'Design Portfolio Reviews'">
+<input type="text" id="group-desc" class="flex-1" placeholder="What's this group about? (optional)">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">Create</button>
+</form>
+<div id="groups-list" class="space-y-2"></div>
+</div>
+
 <p class="text-xs text-slate-400 text-center">Want to chat about a specific talk? Open any session in the <strong>Schedule</strong> tab and use its Session Chat.</p>
 </section>
 
-<!-- ---------- DOCUMENTS (everyone shares with admin) ---------- -->
+<!-- ---------- DOCUMENTS (share with admin only, or with everyone) ---------- -->
 <section id="tab-documents" class="tab-pane hidden">
 <div class="bg-white rounded-xl shadow p-4 mb-4">
 <h2 class="font-semibold text-slate-700 text-sm mb-3">Share a Document</h2>
-<form id="doc-form" class="flex flex-col md:flex-row gap-3">
-<input type="file" id="doc-file" required class="flex-1 text-xs">
-<input type="text" id="doc-comment" class="flex-1" placeholder="Comment for the Convener (optional)">
-<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">Send to Admin</button>
+<form id="doc-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">File</label><input type="file" id="doc-file" required class="w-full text-xs"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Share with</label>
+<select id="doc-visibility" class="w-full">
+<option value="admin_only">Admin only</option>
+<option value="everyone">Everyone (all roles)</option>
+</select></div>
+<div class="flex items-end"><button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold w-full">Share</button></div>
+<div class="md:col-span-4"><label class="text-xs text-slate-500 block mb-1">Comment (optional)</label><input type="text" id="doc-comment" class="w-full" placeholder="Add context for whoever will see this…"></div>
 </form>
 <p id="doc-form-msg" class="text-xs mt-2"></p>
-<p class="text-[11px] text-slate-400 mt-2">Only you and the Convener (admin) can see what you share here.</p>
+<p class="text-[11px] text-slate-400 mt-2">"Admin only" is private between you and the Convener. "Everyone" is visible to every signed-in participant, speaker, and admin.</p>
 </div>
 <div id="documents-list" class="space-y-3"></div>
 </section>
@@ -552,7 +571,7 @@ async function refreshAllForRole() {
     await loadBudgetHeads();
     await Promise.all([renderDashboard(), renderExpenses(), loadProcurement(), renderSpeakers(), renderUsers()]);
   }
-  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents(), renderQA(), renderLoungeChat(), renderDocuments()]);
+  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents(), renderQA(), renderLoungeChat(), renderGroups(), renderDocuments()]);
 }
 
 function subscribeRealtime() {
@@ -566,10 +585,12 @@ function subscribeRealtime() {
   sb.channel("public:questions").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, renderQA).subscribe();
   sb.channel("public:profiles").on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { if (currentRole === "admin") renderUsers(); }).subscribe();
   sb.channel("public:documents").on("postgres_changes", { event: "*", schema: "public", table: "documents" }, renderDocuments).subscribe();
+  sb.channel("public:groups").on("postgres_changes", { event: "*", schema: "public", table: "groups" }, renderGroups).subscribe();
   sb.channel("public:messages").on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
-    const sid = payload.new?.session_id ?? payload.old?.session_id ?? null;
-    if (sid === null) renderLoungeChat();
-    else refreshOpenSessionChat(sid);
+    const row = payload.new || payload.old || {};
+    if (row.group_id != null) refreshOpenGroupChat(row.group_id);
+    else if (row.session_id != null) refreshOpenSessionChat(row.session_id);
+    else renderLoungeChat();
   }).subscribe();
 }
 
@@ -1282,7 +1303,7 @@ function renderChatBubbles(container, rows) {
 }
 
 async function renderLoungeChat() {
-  const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").is("session_id", null).order("created_at").limit(200);
+  const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").is("session_id", null).is("group_id", null).order("created_at").limit(200);
   if (error) { console.error(error); return; }
   renderChatBubbles(document.getElementById("lounge-messages"), data);
 }
@@ -1292,7 +1313,7 @@ document.getElementById("lounge-form").addEventListener("submit", async (e) => {
   const input = document.getElementById("lounge-input");
   const body = input.value.trim();
   if (!body) return;
-  const { error } = await sb.from("messages").insert({ session_id: null, sender_id: currentUser.id, body });
+  const { error } = await sb.from("messages").insert({ session_id: null, group_id: null, sender_id: currentUser.id, body });
   if (error) { alert("Error: " + error.message); return; }
   input.value = "";
   renderLoungeChat();
@@ -1308,6 +1329,79 @@ async function refreshOpenSessionChat(sessionId) {
 }
 
 // ============================================================================
+// DISCUSSION GROUPS
+// ============================================================================
+document.getElementById("group-new-btn").addEventListener("click", () => {
+  document.getElementById("group-form").classList.toggle("hidden");
+});
+
+document.getElementById("group-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("group-name").value.trim();
+  const description = document.getElementById("group-desc").value.trim() || null;
+  if (!name) return;
+  const { error } = await sb.from("groups").insert({ name, description, created_by: currentUser.id });
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  document.getElementById("group-form").classList.add("hidden");
+  renderGroups();
+});
+
+async function renderGroups() {
+  const { data, error } = await sb.from("groups").select("*").order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const el = document.getElementById("groups-list");
+  if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-6">No discussion groups yet — start one above.</p>`; return; }
+  el.innerHTML = data.map(g => `<div class="border border-slate-100 rounded-lg p-3">
+      <div class="flex justify-between items-start gap-2">
+        <div>
+          <button class="group-chat-toggle text-sm font-semibold text-slate-800 hover:text-blue-600" data-group="${g.id}">${escapeHtml(g.name)}</button>
+          ${g.description ? `<p class="text-xs text-slate-400">${escapeHtml(g.description)}</p>` : ""}
+        </div>
+        ${(currentRole === "admin" || g.created_by === currentUser.id) ? `<button class="group-delete text-red-500 text-xs hover:underline shrink-0" data-id="${g.id}">Delete</button>` : ""}
+      </div>
+      <div class="group-chat-panel hidden mt-2" data-group="${g.id}">
+        <div class="group-chat-messages h-56 overflow-y-auto flex flex-col gap-2 p-2 bg-slate-50 rounded-lg" data-group="${g.id}"></div>
+        <form class="group-chat-form flex gap-2 mt-2" data-group="${g.id}">
+          <input type="text" class="group-chat-input flex-1 text-sm" data-group="${g.id}" placeholder="Message in ${escapeHtml(g.name)}…" autocomplete="off">
+          <button type="submit" class="btn-primary text-white text-xs rounded-lg px-3">Send</button>
+        </form>
+      </div>
+    </div>`).join("");
+
+  el.querySelectorAll(".group-chat-toggle").forEach(btn => btn.addEventListener("click", () => {
+    const panel = el.querySelector(`.group-chat-panel[data-group="${btn.dataset.group}"]`);
+    const nowHidden = panel.classList.toggle("hidden");
+    if (!nowHidden) refreshOpenGroupChat(Number(btn.dataset.group));
+  }));
+  el.querySelectorAll(".group-chat-form").forEach(form => form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const gid = Number(form.dataset.group);
+    const input = el.querySelector(`.group-chat-input[data-group="${gid}"]`);
+    const body = input.value.trim();
+    if (!body) return;
+    const { error } = await sb.from("messages").insert({ group_id: gid, sender_id: currentUser.id, body });
+    if (error) { alert("Error: " + error.message); return; }
+    input.value = "";
+    refreshOpenGroupChat(gid);
+  }));
+  el.querySelectorAll(".group-delete").forEach(btn => btn.addEventListener("click", async () => {
+    if (!confirm("Delete this group and its messages?")) return;
+    await sb.from("groups").delete().eq("id", btn.dataset.id);
+    renderGroups();
+  }));
+}
+
+async function refreshOpenGroupChat(groupId) {
+  const panel = document.querySelector(`.group-chat-panel[data-group="${groupId}"]`);
+  if (!panel || panel.classList.contains("hidden")) return;
+  const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").eq("group_id", groupId).order("created_at").limit(200);
+  if (error) { console.error(error); return; }
+  const container = document.querySelector(`.group-chat-messages[data-group="${groupId}"]`);
+  if (container) renderChatBubbles(container, data);
+}
+
+// ============================================================================
 // DOCUMENTS
 // ============================================================================
 document.getElementById("doc-form").addEventListener("submit", async (e) => {
@@ -1315,14 +1409,15 @@ document.getElementById("doc-form").addEventListener("submit", async (e) => {
   const msgEl = document.getElementById("doc-form-msg");
   const file = document.getElementById("doc-file").files[0];
   if (!file) return;
+  const visibility = document.getElementById("doc-visibility").value;
   msgEl.textContent = "Uploading..."; msgEl.className = "text-xs mt-2 text-slate-500";
   const path = `${currentUser.id}/${Date.now()}_${file.name}`;
   const { error: upErr } = await sb.storage.from("documents").upload(path, file);
   if (upErr) { msgEl.textContent = "Upload failed: " + upErr.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
   const comment = document.getElementById("doc-comment").value || null;
-  const { error } = await sb.from("documents").insert({ uploaded_by: currentUser.id, storage_path: path, file_name: file.name, comment });
+  const { error } = await sb.from("documents").insert({ uploaded_by: currentUser.id, storage_path: path, file_name: file.name, comment, visibility });
   if (error) { msgEl.textContent = "Error: " + error.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
-  msgEl.textContent = "Sent to admin ✓"; msgEl.className = "text-xs mt-2 text-emerald-600";
+  msgEl.textContent = (visibility === "everyone" ? "Shared with everyone ✓" : "Sent to admin ✓"); msgEl.className = "text-xs mt-2 text-emerald-600";
   e.target.reset();
   renderDocuments();
 });
@@ -1335,15 +1430,19 @@ async function renderDocuments() {
   const rows = await Promise.all(data.map(async (d) => {
     const { data: signed } = await sb.storage.from("documents").createSignedUrl(d.storage_path, 3600);
     const uploaderName = d.profiles?.full_name || d.profiles?.email || "Someone";
+    const isMine = d.uploaded_by === currentUser.id;
     return `<div class="bg-white rounded-xl shadow p-4">
       <div class="flex justify-between items-start gap-3 flex-wrap">
         <div>
-          ${currentRole === "admin" ? `<p class="text-[11px] text-slate-400">From ${escapeHtml(uploaderName)}</p>` : ""}
+          <p class="text-[11px] text-slate-400">${isMine ? "You shared this" : "From " + escapeHtml(uploaderName)}</p>
           <p class="text-sm font-semibold text-slate-800">${signed ? `<a href="${signed.signedUrl}" target="_blank" class="text-blue-600 underline">${escapeHtml(d.file_name)}</a>` : escapeHtml(d.file_name)}</p>
           ${d.comment ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(d.comment)}</p>` : ""}
           <p class="text-[11px] text-slate-400 mt-1">${new Date(d.created_at).toLocaleString()}</p>
         </div>
-        <span class="badge ${d.status === "reviewed" ? "badge-paid" : "badge-pending"}">${d.status === "reviewed" ? "Reviewed" : "Pending"}</span>
+        <div class="flex flex-col items-end gap-1">
+          <span class="badge ${d.visibility === "everyone" ? "badge-participant" : "badge-admin"}">${d.visibility === "everyone" ? "Everyone" : "Admin only"}</span>
+          <span class="badge ${d.status === "reviewed" ? "badge-paid" : "badge-pending"}">${d.status === "reviewed" ? "Reviewed" : "Pending"}</span>
+        </div>
       </div>
       ${d.admin_reply ? `<div class="mt-3 pt-3 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
           <p class="text-xs text-slate-500 font-semibold mb-1">Admin reply</p>
