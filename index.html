@@ -28,6 +28,7 @@
   .badge-paid { background: #d1fae5; color: #065f46; }
   .badge-reimbursed { background: #dbeafe; color: #1e40af; }
   .badge-admin { background:#fde68a; color:#92400e; }
+  .badge-sub_admin { background:#fed7aa; color:#9a3412; }
   .badge-speaker { background:#ddd6fe; color:#5b21b6; }
   .badge-participant { background:#dbeafe; color:#1e40af; }
   .scrollx { overflow-x: auto; }
@@ -100,7 +101,7 @@
           <span class="block text-[11px] text-slate-400 mt-0.5">Presenting a session</span>
         </label>
       </div>
-      <p class="text-[11px] text-slate-400 mt-1.5">The Convener can adjust this anytime from Users, and only they can grant Admin access.</p>
+      <p class="text-[11px] text-slate-400 mt-1.5">The Convener can adjust this anytime from Users, and only they can grant Admin or Sub Admin access.</p>
     </div>
     <button type="submit" id="signup-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Create Account</button>
   </form>
@@ -381,9 +382,16 @@
 <h2 class="font-semibold text-slate-700 text-sm">Manage User Roles</h2>
 <span id="users-count" class="text-xs text-slate-400"></span>
 </div>
+<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
+<div>
+<p class="text-xs font-semibold text-slate-600">Adding new people</p>
+<p class="text-[11px] text-slate-400">New accounts are created by self sign-up, or in bulk with the admin import script (kept separate from this site for security). Disable removes access instantly, no script needed.</p>
+</div>
+<button id="copy-signup-link-btn" type="button" class="text-xs border rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white whitespace-nowrap">Copy Signup Link</button>
+</div>
 <div class="scrollx">
 <table class="data-tbl w-full" id="users-table">
-<thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+<thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
 <tbody id="users-tbody"></tbody>
 </table>
 </div>
@@ -413,6 +421,7 @@ const escapeHtml = (s) => (s ?? "").toString().replace(/[&<>"']/g, c => ({ "&": 
 
 let currentUser = null;
 let currentRole = "participant";
+let isAdminLike = false; // true for both "admin" and "sub_admin"
 let budgetHeadsCache = [];
 let appInitialised = false;
 
@@ -503,39 +512,54 @@ const TABS_BY_ROLE = {
     ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"],
     ["documents", "Documents"], ["alerts", "Alerts"], ["photos", "Photos"], ["events", "Events"], ["users", "Users"]
   ],
+  sub_admin: [
+    ["dashboard", "Dashboard"], ["expenses", "Expenses"], ["procurement", "Procurement"],
+    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"],
+    ["documents", "Documents"], ["alerts", "Alerts"], ["photos", "Photos"], ["events", "Events"], ["users", "Users"]
+  ],
   speaker: [["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"], ["documents", "Documents"], ["photos", "Photos"], ["events", "Events"]],
   participant: [["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"], ["documents", "Documents"], ["photos", "Photos"], ["events", "Events"]]
 };
 
 const ADMIN_EMAILS = ["s.phalke@iiitdwd.ac.in", "s.phalke2029@gmail.com"];
 
-
 async function loadRoleAndInit() {
-  let { data } = await sb.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
+  let { data } = await sb.from("profiles").select("role, disabled").eq("id", currentUser.id).maybeSingle();
 
   if (!data) {
     const { data: created } = await sb.from("profiles")
       .upsert({ id: currentUser.id, email: currentUser.email, full_name: currentUser.user_metadata?.full_name || null }, { onConflict: "id" })
-      .select("role").maybeSingle();
+      .select("role, disabled").maybeSingle();
     data = created;
+  }
+
+  const isHardcodedAdmin = ADMIN_EMAILS.includes((currentUser.email || "").toLowerCase());
+
+  // If this account has been disabled by an admin, kick them out immediately.
+  // The two hardcoded owner emails can never be locked out this way.
+  if (data?.disabled && !isHardcodedAdmin) {
+    await sb.auth.signOut();
+    showAuthError("This account has been disabled by the admin.");
+    return;
   }
 
   let dbRole = (data && data.role) ? data.role : "participant";
 
-  // Apply the role chosen at sign-up (Participant/Speaker only, never Admin),
+  // Apply the role chosen at sign-up (Participant/Speaker only, never Admin/Sub Admin),
   // the first time this account logs in with the untouched default role.
   const requestedRole = currentUser.user_metadata?.requested_role;
-  if (requestedRole && requestedRole !== "admin" && requestedRole !== dbRole && dbRole === "participant") {
+  if (requestedRole && requestedRole !== "admin" && requestedRole !== "sub_admin" && requestedRole !== dbRole && dbRole === "participant") {
     const { error: roleErr } = await sb.from("profiles").update({ role: requestedRole }).eq("id", currentUser.id);
     if (!roleErr) dbRole = requestedRole;
     // If this fails (e.g. the database policy isn't updated yet), the account
     // simply stays "participant" — an admin can still promote it from Users.
   }
 
-  currentRole = ADMIN_EMAILS.includes((currentUser.email || "").toLowerCase()) ? "admin" : dbRole;
+  currentRole = isHardcodedAdmin ? "admin" : dbRole;
+  isAdminLike = (currentRole === "admin" || currentRole === "sub_admin");
 
   const badge = document.getElementById("user-role-badge");
-  badge.textContent = currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
+  badge.textContent = currentRole.charAt(0).toUpperCase() + currentRole.slice(1).replace("_", " ");
   badge.className = "badge badge-" + currentRole;
 
   const nav = document.getElementById("tab-nav");
@@ -555,9 +579,9 @@ async function loadRoleAndInit() {
   const firstTab = tabs[0][0];
   document.getElementById("tab-" + firstTab).classList.remove("hidden");
 
-  document.getElementById("schedule-admin-form").classList.toggle("hidden", currentRole !== "admin");
-  document.getElementById("alerts-admin-form").classList.toggle("hidden", currentRole !== "admin");
-  document.getElementById("events-admin-form").classList.toggle("hidden", currentRole !== "admin");
+  document.getElementById("schedule-admin-form").classList.toggle("hidden", !isAdminLike);
+  document.getElementById("alerts-admin-form").classList.toggle("hidden", !isAdminLike);
+  document.getElementById("events-admin-form").classList.toggle("hidden", !isAdminLike);
 
   if (appInitialised) { refreshAllForRole(); return; }
   appInitialised = true;
@@ -567,7 +591,7 @@ async function loadRoleAndInit() {
 
 async function refreshAllForRole() {
   await renderAlertBanner();
-  if (currentRole === "admin") {
+  if (isAdminLike) {
     await loadBudgetHeads();
     await Promise.all([renderDashboard(), renderExpenses(), loadProcurement(), renderSpeakers(), renderUsers()]);
   }
@@ -575,15 +599,15 @@ async function refreshAllForRole() {
 }
 
 function subscribeRealtime() {
-  sb.channel("public:expenses").on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => { if (currentRole === "admin") { renderDashboard(); renderExpenses(); } }).subscribe();
-  sb.channel("public:procurement_items").on("postgres_changes", { event: "*", schema: "public", table: "procurement_items" }, () => { if (currentRole === "admin") loadProcurement(); }).subscribe();
-  sb.channel("public:speakers").on("postgres_changes", { event: "*", schema: "public", table: "speakers" }, () => { if (currentRole === "admin") renderSpeakers(); }).subscribe();
+  sb.channel("public:expenses").on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => { if (isAdminLike) { renderDashboard(); renderExpenses(); } }).subscribe();
+  sb.channel("public:procurement_items").on("postgres_changes", { event: "*", schema: "public", table: "procurement_items" }, () => { if (isAdminLike) loadProcurement(); }).subscribe();
+  sb.channel("public:speakers").on("postgres_changes", { event: "*", schema: "public", table: "speakers" }, () => { if (isAdminLike) renderSpeakers(); }).subscribe();
   sb.channel("public:sessions").on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, renderSchedule).subscribe();
   sb.channel("public:alerts").on("postgres_changes", { event: "*", schema: "public", table: "alerts" }, () => { renderAlertBanner(); renderAlertsList(); }).subscribe();
   sb.channel("public:photos").on("postgres_changes", { event: "*", schema: "public", table: "photos" }, renderPhotos).subscribe();
   sb.channel("public:post_events").on("postgres_changes", { event: "*", schema: "public", table: "post_events" }, renderEvents).subscribe();
   sb.channel("public:questions").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, renderQA).subscribe();
-  sb.channel("public:profiles").on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { if (currentRole === "admin") renderUsers(); }).subscribe();
+  sb.channel("public:profiles").on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { if (isAdminLike) renderUsers(); }).subscribe();
   sb.channel("public:documents").on("postgres_changes", { event: "*", schema: "public", table: "documents" }, renderDocuments).subscribe();
   sb.channel("public:groups").on("postgres_changes", { event: "*", schema: "public", table: "groups" }, renderGroups).subscribe();
   sb.channel("public:messages").on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
@@ -595,7 +619,7 @@ function subscribeRealtime() {
 }
 
 // ============================================================================
-// DASHBOARD / EXPENSES / PROCUREMENT / SPEAKERS (admin only — unchanged logic, plus totals)
+// DASHBOARD / EXPENSES / PROCUREMENT / SPEAKERS (admin + sub_admin — plus totals)
 // ============================================================================
 async function loadBudgetHeads() {
   const { data, error } = await sb.from("budget_heads").select("*").order("id");
@@ -848,7 +872,6 @@ function renderProcurement() {
     recalcProcurementTotals();
   }
 
-  // Dropdowns: worth a full reload since they can affect grouping/progress.
   document.querySelectorAll(".proc-status").forEach(el => el.addEventListener("change", async () => {
     const { error } = await sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id);
     if (error) { showProcSaveStatus("Couldn't save status: " + error.message, true); return; }
@@ -862,8 +885,6 @@ function renderProcurement() {
     loadProcurement();
   }));
 
-  // Text/number fields: save quietly in the background only — never rebuild the
-  // table while typing, that's what made editing feel broken before.
   document.querySelectorAll(".proc-name").forEach(el => el.addEventListener("input", () => {
     procDebouncedUpdate(el.dataset.id, "item_name", el.value);
     const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.item_name = el.value;
@@ -985,7 +1006,7 @@ async function renderSpeakers() {
 }
 
 // ============================================================================
-// SCHEDULE + FEEDBACK (everyone)
+// SCHEDULE + FEEDBACK + SESSION CHAT (everyone)
 // ============================================================================
 document.getElementById("session-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1023,7 +1044,7 @@ async function renderSchedule() {
     const ratings = feedbackAgg[s.id] || [];
     const avg = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) : null;
     const mine = feedbackByUser[s.id];
-    const canRate = currentRole !== "admin";
+    const canRate = !isAdminLike;
     return `<div class="bg-white rounded-xl shadow p-4">
       <div class="flex justify-between items-start flex-wrap gap-2">
         <div>
@@ -1033,7 +1054,7 @@ async function renderSchedule() {
           ${s.description ? `<p class="text-xs text-slate-400 mt-1">${escapeHtml(s.description)}</p>` : ""}
         </div>
         ${avg ? `<span class="badge bg-amber-100 text-amber-800">★ ${avg} (${ratings.length})</span>` : ""}
-        ${currentRole === "admin" ? `<button class="sess-delete text-red-500 text-xs hover:underline" data-id="${s.id}">Delete</button>` : ""}
+        ${isAdminLike ? `<button class="sess-delete text-red-500 text-xs hover:underline" data-id="${s.id}">Delete</button>` : ""}
       </div>
       ${canRate ? `<div class="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
         <div class="flex gap-0.5 star-row" data-session="${s.id}">
@@ -1127,7 +1148,7 @@ async function renderAlertsList() {
   el.innerHTML = data.map(a => `<div class="bg-white rounded-xl shadow p-3 flex items-center justify-between gap-3">
       <div><p class="text-sm ${a.active ? "text-slate-800 font-medium" : "text-slate-400 line-through"}">${escapeHtml(a.message)}</p>
       <p class="text-[11px] text-slate-400">${new Date(a.created_at).toLocaleString()}</p></div>
-      ${currentRole === "admin" ? `<div class="flex gap-2 shrink-0">
+      ${isAdminLike ? `<div class="flex gap-2 shrink-0">
         <button class="alert-toggle text-xs text-blue-600 hover:underline" data-id="${a.id}" data-active="${a.active}">${a.active ? "Deactivate" : "Reactivate"}</button>
         <button class="alert-delete text-xs text-red-500 hover:underline" data-id="${a.id}">Delete</button>
       </div>` : ""}
@@ -1163,7 +1184,7 @@ async function renderPhotos() {
   if (!data.length) { gallery.innerHTML = `<p class="col-span-full text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No photos shared yet.</p>`; return; }
   gallery.innerHTML = data.map(p => {
     const { data: pub } = sb.storage.from("photos").getPublicUrl(p.storage_path);
-    const canDelete = currentRole === "admin" || p.uploaded_by === currentUser.id;
+    const canDelete = isAdminLike || p.uploaded_by === currentUser.id;
     return `<div class="bg-white rounded-xl shadow overflow-hidden">
       <img src="${pub.publicUrl}" class="w-full h-32 object-cover" loading="lazy">
       <div class="p-2">
@@ -1208,7 +1229,7 @@ async function renderEvents() {
         <h3 class="font-semibold text-slate-800">${escapeHtml(ev.title)}</h3>
         ${ev.description ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(ev.description)}</p>` : ""}
       </div>
-      ${currentRole === "admin" ? `<button class="event-delete text-red-500 text-xs hover:underline shrink-0" data-id="${ev.id}">Delete</button>` : ""}
+      ${isAdminLike ? `<button class="event-delete text-red-500 text-xs hover:underline shrink-0" data-id="${ev.id}">Delete</button>` : ""}
     </div>`).join("");
   el.querySelectorAll(".event-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this event?")) return; await sb.from("post_events").delete().eq("id", btn.dataset.id); renderEvents(); }));
 }
@@ -1233,7 +1254,7 @@ async function renderQA() {
   if (error) { console.error(error); return; }
   const el = document.getElementById("qa-list");
   if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No questions yet — be the first to ask.</p>`; return; }
-  const canAnswer = currentRole === "admin" || currentRole === "speaker";
+  const canAnswer = isAdminLike || currentRole === "speaker";
   el.innerHTML = data.map(q => {
     const askerName = q.profiles?.full_name || q.profiles?.email || "Someone";
     return `<div class="bg-white rounded-xl shadow p-4">
@@ -1242,7 +1263,7 @@ async function renderQA() {
           <p class="text-sm text-slate-800 font-medium">${escapeHtml(q.question)}</p>
           <p class="text-[11px] text-slate-400 mt-1">Asked by ${escapeHtml(askerName)} &middot; ${new Date(q.created_at).toLocaleString()}</p>
         </div>
-        ${currentRole === "admin" ? `<button class="qa-delete text-red-500 text-xs hover:underline shrink-0" data-id="${q.id}">Delete</button>` : ""}
+        ${isAdminLike ? `<button class="qa-delete text-red-500 text-xs hover:underline shrink-0" data-id="${q.id}">Delete</button>` : ""}
       </div>
       ${q.answer ? `<div class="mt-3 pt-3 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
           <p class="text-xs text-slate-500 font-semibold mb-1">Answer</p>
@@ -1265,30 +1286,52 @@ async function renderQA() {
 }
 
 // ============================================================================
-// USERS (admin — role management, replaces manual SQL)
+// USERS (admin/sub_admin — role management + Disable, replaces manual SQL)
 // ============================================================================
+document.getElementById("copy-signup-link-btn")?.addEventListener("click", () => {
+  navigator.clipboard.writeText(window.location.origin + window.location.pathname).catch(() => {});
+  const btn = document.getElementById("copy-signup-link-btn");
+  const original = btn.textContent;
+  btn.textContent = "Copied ✓";
+  setTimeout(() => { btn.textContent = original; }, 1500);
+});
+
 async function renderUsers() {
   const { data, error } = await sb.from("profiles").select("*").order("created_at");
   if (error) { console.error(error); return; }
   document.getElementById("users-count").textContent = data.length + " accounts";
-  document.getElementById("users-tbody").innerHTML = data.map(u => `<tr>
+  document.getElementById("users-tbody").innerHTML = data.map(u => {
+    const canEscalate = currentRole === "admin"; // only a TRUE Admin can grant Admin/Sub Admin
+    const isTargetEscalated = u.role === "admin" || u.role === "sub_admin";
+    const canToggleDisable = currentRole === "admin" || u.role !== "admin"; // sub_admin can't disable a true Admin
+    return `<tr>
       <td>${escapeHtml(u.full_name || "—")}</td>
       <td class="text-xs">${escapeHtml(u.email || "—")}</td>
-      <td><select class="user-role-select text-xs" data-id="${u.id}">
+      <td><select class="user-role-select text-xs" data-id="${u.id}" ${(!canEscalate && isTargetEscalated) ? "disabled" : ""}>
             <option value="participant" ${u.role === "participant" ? "selected" : ""}>Participant</option>
             <option value="speaker" ${u.role === "speaker" ? "selected" : ""}>Speaker</option>
-            <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
+            ${canEscalate ? `<option value="sub_admin" ${u.role === "sub_admin" ? "selected" : ""}>Sub Admin</option>
+            <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>` : ""}
           </select></td>
       <td class="text-xs text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
-    </tr>`).join("");
+      <td>${canToggleDisable ? `<button class="user-disable-toggle text-xs ${u.disabled ? "text-emerald-600" : "text-red-500"} hover:underline" data-id="${u.id}" data-disabled="${u.disabled}">${u.disabled ? "Enable" : "Disable"}</button>` : `<span class="text-[11px] text-slate-300">—</span>`}</td>
+    </tr>`;
+  }).join("");
   document.querySelectorAll(".user-role-select").forEach(sel => sel.addEventListener("change", async () => {
     const { error } = await sb.from("profiles").update({ role: sel.value }).eq("id", sel.dataset.id);
     if (error) { alert("Couldn't update role: " + error.message); renderUsers(); return; }
   }));
+  document.querySelectorAll(".user-disable-toggle").forEach(btn => btn.addEventListener("click", async () => {
+    const nowDisabled = btn.dataset.disabled !== "true";
+    if (nowDisabled && !confirm("Disable this account? They'll be signed out and blocked from logging back in until re-enabled.")) return;
+    const { error } = await sb.from("profiles").update({ disabled: nowDisabled }).eq("id", btn.dataset.id);
+    if (error) { alert("Error: " + error.message); return; }
+    renderUsers();
+  }));
 }
 
 // ============================================================================
-// CHAT — shared helpers for Lounge (session_id null) and per-session threads
+// CHAT — shared helpers for Lounge, per-session threads, and group chats
 // ============================================================================
 function renderChatBubbles(container, rows) {
   container.innerHTML = rows.map(m => {
@@ -1321,7 +1364,7 @@ document.getElementById("lounge-form").addEventListener("submit", async (e) => {
 
 async function refreshOpenSessionChat(sessionId) {
   const panel = document.querySelector(`.sess-chat-panel[data-session="${sessionId}"]`);
-  if (!panel || panel.classList.contains("hidden")) return; // only refresh if actually open
+  if (!panel || panel.classList.contains("hidden")) return;
   const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").eq("session_id", sessionId).order("created_at").limit(200);
   if (error) { console.error(error); return; }
   const container = document.querySelector(`.session-chat-messages[data-session="${sessionId}"]`);
@@ -1358,7 +1401,7 @@ async function renderGroups() {
           <button class="group-chat-toggle text-sm font-semibold text-slate-800 hover:text-blue-600" data-group="${g.id}">${escapeHtml(g.name)}</button>
           ${g.description ? `<p class="text-xs text-slate-400">${escapeHtml(g.description)}</p>` : ""}
         </div>
-        ${(currentRole === "admin" || g.created_by === currentUser.id) ? `<button class="group-delete text-red-500 text-xs hover:underline shrink-0" data-id="${g.id}">Delete</button>` : ""}
+        ${(isAdminLike || g.created_by === currentUser.id) ? `<button class="group-delete text-red-500 text-xs hover:underline shrink-0" data-id="${g.id}">Delete</button>` : ""}
       </div>
       <div class="group-chat-panel hidden mt-2" data-group="${g.id}">
         <div class="group-chat-messages h-56 overflow-y-auto flex flex-col gap-2 p-2 bg-slate-50 rounded-lg" data-group="${g.id}"></div>
@@ -1447,7 +1490,7 @@ async function renderDocuments() {
       ${d.admin_reply ? `<div class="mt-3 pt-3 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
           <p class="text-xs text-slate-500 font-semibold mb-1">Admin reply</p>
           <p class="text-sm text-slate-700">${escapeHtml(d.admin_reply)}</p>
-        </div>` : currentRole === "admin" ? `<div class="mt-3 pt-3 border-t border-slate-100 flex gap-2">
+        </div>` : isAdminLike ? `<div class="mt-3 pt-3 border-t border-slate-100 flex gap-2">
           <input type="text" class="doc-reply-input flex-1" data-id="${d.id}" placeholder="Reply to this…">
           <button class="doc-reply-submit btn-primary text-white text-xs rounded-lg px-3 py-1.5" data-id="${d.id}">Reply</button>
         </div>` : ""}
