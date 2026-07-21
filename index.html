@@ -37,6 +37,12 @@
   .auth-toggle-btn.active { color: var(--navy); font-weight:700; }
   .btn-primary { background: var(--navy); }
   .btn-primary:hover { background: var(--navy-dark); }
+  .role-card { border-color: #cbd5e1; }
+  .role-card.selected { border-color: var(--navy); background: #eef2f7; box-shadow: 0 0 0 1px var(--navy); }
+  .chat-bubble { max-width: 80%; padding: 6px 10px; border-radius: 12px; font-size: 13px; }
+  .chat-bubble.mine { align-self: flex-end; background: var(--navy); color: white; border-bottom-right-radius: 3px; }
+  .chat-bubble.theirs { align-self: flex-start; background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 3px; }
+  .chat-sender { font-size: 10px; font-weight: 600; opacity: 0.7; margin-bottom: 2px; }
   .star { cursor:pointer; font-size:20px; color:#cbd5e1; }
   .star.filled { color:#f59e0b; }
 </style>
@@ -80,7 +86,22 @@
       <input type="password" id="signup-password" required minlength="6" class="w-full" placeholder="At least 6 characters" autocomplete="new-password" /></div>
     <div><label class="text-xs font-medium text-slate-600 block mb-1">Confirm password</label>
       <input type="password" id="signup-password2" required minlength="6" class="w-full" placeholder="Re-enter password" autocomplete="new-password" /></div>
-    <p class="text-[11px] text-slate-400">New accounts start as <strong>Participant</strong>. The Convener can upgrade you to Speaker or Admin.</p>
+    <div>
+      <label class="text-xs font-medium text-slate-600 block mb-1.5">I'm joining as</label>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="role-card border rounded-lg p-2.5 cursor-pointer text-center transition-colors" data-role="participant">
+          <input type="radio" name="signup-role" value="participant" checked class="sr-only">
+          <span class="block text-sm font-semibold text-slate-700">Participant</span>
+          <span class="block text-[11px] text-slate-400 mt-0.5">Attending the workshop</span>
+        </label>
+        <label class="role-card border rounded-lg p-2.5 cursor-pointer text-center transition-colors" data-role="speaker">
+          <input type="radio" name="signup-role" value="speaker" class="sr-only">
+          <span class="block text-sm font-semibold text-slate-700">Speaker</span>
+          <span class="block text-[11px] text-slate-400 mt-0.5">Presenting a session</span>
+        </label>
+      </div>
+      <p class="text-[11px] text-slate-400 mt-1.5">The Convener can adjust this anytime from Users, and only they can grant Admin access.</p>
+    </div>
     <button type="submit" id="signup-submit-btn" class="w-full btn-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors">Create Account</button>
   </form>
 
@@ -303,6 +324,37 @@
 <div id="qa-list" class="space-y-3"></div>
 </section>
 
+<!-- ---------- CHAT (everyone) ---------- -->
+<section id="tab-chat" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<div class="flex items-center justify-between mb-1">
+<h2 class="font-semibold text-slate-700 text-sm">Workshop Lounge</h2>
+<span class="text-[11px] text-slate-400">Open to everyone</span>
+</div>
+<div id="lounge-messages" class="h-80 overflow-y-auto flex flex-col gap-2 py-2 border-t border-b border-slate-100 my-2"></div>
+<form id="lounge-form" class="flex gap-2">
+<input type="text" id="lounge-input" class="flex-1" placeholder="Say something to everyone…" autocomplete="off">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold">Send</button>
+</form>
+</div>
+<p class="text-xs text-slate-400 text-center">Want to chat about a specific talk? Open any session in the <strong>Schedule</strong> tab and use its Session Chat.</p>
+</section>
+
+<!-- ---------- DOCUMENTS (everyone shares with admin) ---------- -->
+<section id="tab-documents" class="tab-pane hidden">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Share a Document</h2>
+<form id="doc-form" class="flex flex-col md:flex-row gap-3">
+<input type="file" id="doc-file" required class="flex-1 text-xs">
+<input type="text" id="doc-comment" class="flex-1" placeholder="Comment for the Convener (optional)">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap">Send to Admin</button>
+</form>
+<p id="doc-form-msg" class="text-xs mt-2"></p>
+<p class="text-[11px] text-slate-400 mt-2">Only you and the Convener (admin) can see what you share here.</p>
+</div>
+<div id="documents-list" class="space-y-3"></div>
+</section>
+
 <!-- ---------- USERS (admin) ---------- -->
 <section id="tab-users" class="tab-pane hidden">
 <div class="bg-white rounded-xl shadow p-4">
@@ -363,6 +415,16 @@ showSignupBtn.addEventListener("click", () => { showSignupBtn.classList.add("act
 function showAuthError(msg) { authSuccess.classList.add("hidden"); authError.textContent = msg; authError.classList.remove("hidden"); }
 function showAuthSuccess(msg) { authError.classList.add("hidden"); authSuccess.textContent = msg; authSuccess.classList.remove("hidden"); }
 
+const roleCards = document.querySelectorAll(".role-card");
+function syncRoleCardStyles() {
+  roleCards.forEach(card => card.classList.toggle("selected", card.querySelector("input").checked));
+}
+roleCards.forEach(card => card.addEventListener("click", () => {
+  card.querySelector("input").checked = true;
+  syncRoleCardStyles();
+}));
+syncRoleCardStyles();
+
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault(); clearAuthMessages();
   if (!sb) { showAuthError("App is not configured yet."); return; }
@@ -382,11 +444,12 @@ signupForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
   const password2 = document.getElementById("signup-password2").value;
+  const requestedRole = document.querySelector('input[name="signup-role"]:checked').value; // "participant" or "speaker" only — never admin, by design.
   if (password !== password2) { showAuthError("Passwords don't match."); return; }
   if (password.length < 6) { showAuthError("Password must be at least 6 characters."); return; }
   const btn = document.getElementById("signup-submit-btn");
   btn.disabled = true; btn.textContent = "Creating account…";
-  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name, requested_role: requestedRole } } });
   btn.disabled = false; btn.textContent = "Create Account";
   if (error) { showAuthError(error.message); return; }
   if (data.session) { showAuthSuccess("Account created — signing you in…"); }
@@ -418,11 +481,11 @@ if (sb) {
 const TABS_BY_ROLE = {
   admin: [
     ["dashboard", "Dashboard"], ["expenses", "Expenses"], ["procurement", "Procurement"],
-    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["qa", "Q&A"], ["alerts", "Alerts"],
-    ["photos", "Photos"], ["events", "Events"], ["users", "Users"]
+    ["speakers", "Speaker Logistics"], ["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"],
+    ["documents", "Documents"], ["alerts", "Alerts"], ["photos", "Photos"], ["events", "Events"], ["users", "Users"]
   ],
-  speaker: [["schedule", "Schedule"], ["qa", "Q&A"], ["photos", "Photos"], ["events", "Events"]],
-  participant: [["schedule", "Schedule"], ["qa", "Q&A"], ["photos", "Photos"], ["events", "Events"]]
+  speaker: [["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"], ["documents", "Documents"], ["photos", "Photos"], ["events", "Events"]],
+  participant: [["schedule", "Schedule"], ["chat", "Chat"], ["qa", "Q&A"], ["documents", "Documents"], ["photos", "Photos"], ["events", "Events"]]
 };
 
 const ADMIN_EMAILS = ["s.phalke@iiitdwd.ac.in", "s.phalke2029@gmail.com"];
@@ -438,7 +501,18 @@ async function loadRoleAndInit() {
     data = created;
   }
 
-  const dbRole = (data && data.role) ? data.role : "participant";
+  let dbRole = (data && data.role) ? data.role : "participant";
+
+  // Apply the role chosen at sign-up (Participant/Speaker only, never Admin),
+  // the first time this account logs in with the untouched default role.
+  const requestedRole = currentUser.user_metadata?.requested_role;
+  if (requestedRole && requestedRole !== "admin" && requestedRole !== dbRole && dbRole === "participant") {
+    const { error: roleErr } = await sb.from("profiles").update({ role: requestedRole }).eq("id", currentUser.id);
+    if (!roleErr) dbRole = requestedRole;
+    // If this fails (e.g. the database policy isn't updated yet), the account
+    // simply stays "participant" — an admin can still promote it from Users.
+  }
+
   currentRole = ADMIN_EMAILS.includes((currentUser.email || "").toLowerCase()) ? "admin" : dbRole;
 
   const badge = document.getElementById("user-role-badge");
@@ -478,7 +552,7 @@ async function refreshAllForRole() {
     await loadBudgetHeads();
     await Promise.all([renderDashboard(), renderExpenses(), loadProcurement(), renderSpeakers(), renderUsers()]);
   }
-  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents(), renderQA()]);
+  await Promise.all([renderSchedule(), renderAlertsList(), renderPhotos(), renderEvents(), renderQA(), renderLoungeChat(), renderDocuments()]);
 }
 
 function subscribeRealtime() {
@@ -491,6 +565,12 @@ function subscribeRealtime() {
   sb.channel("public:post_events").on("postgres_changes", { event: "*", schema: "public", table: "post_events" }, renderEvents).subscribe();
   sb.channel("public:questions").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, renderQA).subscribe();
   sb.channel("public:profiles").on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { if (currentRole === "admin") renderUsers(); }).subscribe();
+  sb.channel("public:documents").on("postgres_changes", { event: "*", schema: "public", table: "documents" }, renderDocuments).subscribe();
+  sb.channel("public:messages").on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
+    const sid = payload.new?.session_id ?? payload.old?.session_id ?? null;
+    if (sid === null) renderLoungeChat();
+    else refreshOpenSessionChat(sid);
+  }).subscribe();
 }
 
 // ============================================================================
@@ -941,8 +1021,35 @@ async function renderSchedule() {
         <input type="text" class="fb-comment flex-1 min-w-[160px]" data-session="${s.id}" placeholder="Quick feedback (optional)" value="${escapeHtml(mine?.comment || "")}">
         <button class="fb-submit btn-primary text-white text-xs rounded-lg px-3 py-1.5" data-session="${s.id}">${mine ? "Update" : "Submit"}</button>
       </div>` : ""}
+      <div class="mt-2 pt-2 border-t border-slate-100">
+        <button class="sess-chat-toggle text-xs text-blue-600 hover:underline" data-session="${s.id}">💬 Session Chat</button>
+        <div class="sess-chat-panel hidden mt-2" data-session="${s.id}">
+          <div class="session-chat-messages h-56 overflow-y-auto flex flex-col gap-2 p-2 bg-slate-50 rounded-lg" data-session="${s.id}"></div>
+          <form class="sess-chat-form flex gap-2 mt-2" data-session="${s.id}">
+            <input type="text" class="sess-chat-input flex-1 text-sm" data-session="${s.id}" placeholder="Message about this session…" autocomplete="off">
+            <button type="submit" class="btn-primary text-white text-xs rounded-lg px-3">Send</button>
+          </form>
+        </div>
+      </div>
     </div>`;
   }).join("");
+
+  listEl.querySelectorAll(".sess-chat-toggle").forEach(btn => btn.addEventListener("click", () => {
+    const panel = listEl.querySelector(`.sess-chat-panel[data-session="${btn.dataset.session}"]`);
+    const nowHidden = panel.classList.toggle("hidden");
+    if (!nowHidden) refreshOpenSessionChat(Number(btn.dataset.session));
+  }));
+  listEl.querySelectorAll(".sess-chat-form").forEach(form => form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sid = Number(form.dataset.session);
+    const input = listEl.querySelector(`.sess-chat-input[data-session="${sid}"]`);
+    const body = input.value.trim();
+    if (!body) return;
+    const { error } = await sb.from("messages").insert({ session_id: sid, sender_id: currentUser.id, body });
+    if (error) { alert("Error: " + error.message); return; }
+    input.value = "";
+    refreshOpenSessionChat(sid);
+  }));
 
   listEl.querySelectorAll(".sess-delete").forEach(btn => btn.addEventListener("click", async () => { if (!confirm("Delete this session?")) return; await sb.from("sessions").delete().eq("id", btn.dataset.id); renderSchedule(); }));
 
@@ -1156,6 +1263,106 @@ async function renderUsers() {
   document.querySelectorAll(".user-role-select").forEach(sel => sel.addEventListener("change", async () => {
     const { error } = await sb.from("profiles").update({ role: sel.value }).eq("id", sel.dataset.id);
     if (error) { alert("Couldn't update role: " + error.message); renderUsers(); return; }
+  }));
+}
+
+// ============================================================================
+// CHAT — shared helpers for Lounge (session_id null) and per-session threads
+// ============================================================================
+function renderChatBubbles(container, rows) {
+  container.innerHTML = rows.map(m => {
+    const mine = m.sender_id === currentUser.id;
+    const name = m.profiles?.full_name || m.profiles?.email || "Someone";
+    return `<div class="chat-bubble ${mine ? "mine" : "theirs"}">
+      ${!mine ? `<div class="chat-sender">${escapeHtml(name)}</div>` : ""}
+      <div>${escapeHtml(m.body)}</div>
+    </div>`;
+  }).join("");
+  container.scrollTop = container.scrollHeight;
+}
+
+async function renderLoungeChat() {
+  const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").is("session_id", null).order("created_at").limit(200);
+  if (error) { console.error(error); return; }
+  renderChatBubbles(document.getElementById("lounge-messages"), data);
+}
+
+document.getElementById("lounge-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("lounge-input");
+  const body = input.value.trim();
+  if (!body) return;
+  const { error } = await sb.from("messages").insert({ session_id: null, sender_id: currentUser.id, body });
+  if (error) { alert("Error: " + error.message); return; }
+  input.value = "";
+  renderLoungeChat();
+});
+
+async function refreshOpenSessionChat(sessionId) {
+  const panel = document.querySelector(`.sess-chat-panel[data-session="${sessionId}"]`);
+  if (!panel || panel.classList.contains("hidden")) return; // only refresh if actually open
+  const { data, error } = await sb.from("messages").select("*, profiles(full_name,email)").eq("session_id", sessionId).order("created_at").limit(200);
+  if (error) { console.error(error); return; }
+  const container = document.querySelector(`.session-chat-messages[data-session="${sessionId}"]`);
+  if (container) renderChatBubbles(container, data);
+}
+
+// ============================================================================
+// DOCUMENTS
+// ============================================================================
+document.getElementById("doc-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById("doc-form-msg");
+  const file = document.getElementById("doc-file").files[0];
+  if (!file) return;
+  msgEl.textContent = "Uploading..."; msgEl.className = "text-xs mt-2 text-slate-500";
+  const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+  const { error: upErr } = await sb.storage.from("documents").upload(path, file);
+  if (upErr) { msgEl.textContent = "Upload failed: " + upErr.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+  const comment = document.getElementById("doc-comment").value || null;
+  const { error } = await sb.from("documents").insert({ uploaded_by: currentUser.id, storage_path: path, file_name: file.name, comment });
+  if (error) { msgEl.textContent = "Error: " + error.message; msgEl.className = "text-xs mt-2 text-red-600"; return; }
+  msgEl.textContent = "Sent to admin ✓"; msgEl.className = "text-xs mt-2 text-emerald-600";
+  e.target.reset();
+  renderDocuments();
+});
+
+async function renderDocuments() {
+  const { data, error } = await sb.from("documents").select("*, profiles(full_name,email)").order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  const el = document.getElementById("documents-list");
+  if (!data.length) { el.innerHTML = `<p class="text-sm text-slate-400 text-center py-8 bg-white rounded-xl shadow">No documents shared yet.</p>`; return; }
+  const rows = await Promise.all(data.map(async (d) => {
+    const { data: signed } = await sb.storage.from("documents").createSignedUrl(d.storage_path, 3600);
+    const uploaderName = d.profiles?.full_name || d.profiles?.email || "Someone";
+    return `<div class="bg-white rounded-xl shadow p-4">
+      <div class="flex justify-between items-start gap-3 flex-wrap">
+        <div>
+          ${currentRole === "admin" ? `<p class="text-[11px] text-slate-400">From ${escapeHtml(uploaderName)}</p>` : ""}
+          <p class="text-sm font-semibold text-slate-800">${signed ? `<a href="${signed.signedUrl}" target="_blank" class="text-blue-600 underline">${escapeHtml(d.file_name)}</a>` : escapeHtml(d.file_name)}</p>
+          ${d.comment ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(d.comment)}</p>` : ""}
+          <p class="text-[11px] text-slate-400 mt-1">${new Date(d.created_at).toLocaleString()}</p>
+        </div>
+        <span class="badge ${d.status === "reviewed" ? "badge-paid" : "badge-pending"}">${d.status === "reviewed" ? "Reviewed" : "Pending"}</span>
+      </div>
+      ${d.admin_reply ? `<div class="mt-3 pt-3 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 px-4 py-3 rounded-b-xl">
+          <p class="text-xs text-slate-500 font-semibold mb-1">Admin reply</p>
+          <p class="text-sm text-slate-700">${escapeHtml(d.admin_reply)}</p>
+        </div>` : currentRole === "admin" ? `<div class="mt-3 pt-3 border-t border-slate-100 flex gap-2">
+          <input type="text" class="doc-reply-input flex-1" data-id="${d.id}" placeholder="Reply to this…">
+          <button class="doc-reply-submit btn-primary text-white text-xs rounded-lg px-3 py-1.5" data-id="${d.id}">Reply</button>
+        </div>` : ""}
+    </div>`;
+  }));
+  el.innerHTML = rows.join("");
+
+  el.querySelectorAll(".doc-reply-submit").forEach(btn => btn.addEventListener("click", async () => {
+    const input = el.querySelector(`.doc-reply-input[data-id="${btn.dataset.id}"]`);
+    const reply = input.value.trim();
+    if (!reply) { alert("Type a reply first."); return; }
+    const { error } = await sb.from("documents").update({ admin_reply: reply, status: "reviewed" }).eq("id", btn.dataset.id);
+    if (error) { alert("Error: " + error.message); return; }
+    renderDocuments();
   }));
 }
 </script>
