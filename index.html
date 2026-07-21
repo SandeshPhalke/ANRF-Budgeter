@@ -350,6 +350,8 @@ const TABS_BY_ROLE = {
   participant: [["schedule", "Schedule"], ["photos", "Photos"], ["events", "Events"]]
 };
 
+const ADMIN_EMAILS = ["s.phalke@iiitdwd.ac.in", "s.phalke2029@gmail.com"];
+
 async function loadRoleAndInit() {
   let { data } = await sb.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
 
@@ -360,7 +362,8 @@ async function loadRoleAndInit() {
     data = created;
   }
 
-  currentRole = (data && data.role) ? data.role : "participant";
+  const dbRole = (data && data.role) ? data.role : "participant";
+  currentRole = ADMIN_EMAILS.includes((currentUser.email || "").toLowerCase()) ? "admin" : dbRole;
 
   const badge = document.getElementById("user-role-badge");
   badge.textContent = currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
