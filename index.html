@@ -112,9 +112,23 @@
 <!-- ---------- DASHBOARD (admin) ---------- -->
 <section id="tab-dashboard" class="tab-pane hidden">
 <div id="dash-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
-<div class="bg-white rounded-xl shadow p-4">
+<div class="bg-white rounded-xl shadow p-4 mb-4">
 <h2 class="font-semibold text-slate-700 text-sm mb-3">Overall Sanction Utilisation</h2>
 <div id="dash-overall"></div>
+</div>
+<div class="bg-white rounded-xl shadow p-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Manage Budget Heads</h2>
+<div class="scrollx">
+<table class="data-tbl w-full" id="budget-heads-table">
+<thead><tr><th>Name</th><th>Sanctioned (Rs.)</th><th></th></tr></thead>
+<tbody id="budget-heads-tbody"></tbody>
+</table>
+</div>
+<form id="budget-head-form" class="flex flex-wrap gap-3 mt-3">
+<input type="text" id="bh-name" required class="flex-1 min-w-[200px]" placeholder="New budget head name">
+<input type="number" step="0.01" id="bh-amount" required class="w-40" placeholder="Sanctioned Rs.">
+<button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold">Add Head</button>
+</form>
 </div>
 </section>
 
@@ -183,13 +197,23 @@
 <button id="proc-reset-filters" type="button" class="text-xs text-blue-600 hover:underline">Reset</button>
 </div>
 </div>
+<div class="bg-white rounded-xl shadow p-4 mb-4">
+<h2 class="font-semibold text-slate-700 text-sm mb-3">Add Procurement Item</h2>
+<form id="proc-add-form" class="grid grid-cols-1 md:grid-cols-6 gap-3">
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Budget Head</label><select id="proc-add-head" required class="w-full"></select></div>
+<div class="md:col-span-2"><label class="text-xs text-slate-500 block mb-1">Item Name</label><input type="text" id="proc-add-name" required class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Quantity</label><input type="number" min="1" step="1" id="proc-add-qty" value="1" class="w-full"></div>
+<div><label class="text-xs text-slate-500 block mb-1">Approx. (Rs./unit)</label><input type="number" step="0.01" id="proc-add-approx" class="w-full"></div>
+<div class="md:col-span-6 flex justify-end"><button type="submit" class="btn-primary text-white rounded-lg px-4 py-2 text-sm font-semibold">Add Item</button></div>
+</form>
+</div>
 <div class="bg-white rounded-xl shadow p-4">
 <p id="proc-manual-hint" class="text-[11px] text-slate-400 mb-2 hidden">Drag the ☰ handle to reorder. Reordering only works in "Manual order" sort with no filters applied.</p>
 <div class="scrollx">
 <table class="data-tbl w-full" id="procurement-table">
-<thead><tr><th></th><th>Budget Head</th><th>Item</th><th>Approx. (Rs.)</th><th>Actual (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th></tr></thead>
+<thead><tr><th></th><th>Budget Head</th><th>Item</th><th>Qty</th><th>Approx./unit (Rs.)</th><th>Actual/unit (Rs.)</th><th>Line Total (Rs.)</th><th>Vendor</th><th>Status</th><th>Notes</th><th></th></tr></thead>
 <tbody id="procurement-tbody"></tbody>
-<tfoot><tr><td></td><td colspan="2">Total</td><td id="procurement-approx-total"></td><td id="procurement-actual-total"></td><td colspan="3"></td></tr></tfoot>
+<tfoot><tr><td></td><td colspan="3">Total</td><td id="procurement-approx-total"></td><td id="procurement-actual-total"></td><td id="procurement-line-total"></td><td colspan="4"></td></tr></tfoot>
 </table>
 </div>
 </div>
@@ -444,9 +468,39 @@ async function loadBudgetHeads() {
   const { data, error } = await sb.from("budget_heads").select("*").order("id");
   if (error) { console.error(error); return; }
   budgetHeadsCache = data || [];
-  const headSelect = document.getElementById("exp-head");
-  headSelect.innerHTML = budgetHeadsCache.map(h => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join("");
+  const headOptions = budgetHeadsCache.map(h => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join("");
+  document.getElementById("exp-head").innerHTML = headOptions;
+  document.getElementById("proc-add-head").innerHTML = headOptions;
+  renderBudgetHeadsTable();
 }
+
+function renderBudgetHeadsTable() {
+  document.getElementById("budget-heads-tbody").innerHTML = budgetHeadsCache.map(h => `
+    <tr>
+      <td><input type="text" class="bh-name" data-id="${h.id}" value="${escapeHtml(h.name)}"></td>
+      <td><input type="number" step="0.01" class="bh-amount w-32" data-id="${h.id}" value="${h.sanctioned_amount}"></td>
+      <td><button class="bh-delete text-red-500 text-xs hover:underline" data-id="${h.id}">Delete</button></td>
+    </tr>`).join("");
+  const debounced = (() => { let timers = {}; return (id, field, value) => { clearTimeout(timers[id + field]); timers[id + field] = setTimeout(async () => { await sb.from("budget_heads").update({ [field]: value }).eq("id", id); const row = budgetHeadsCache.find(r => r.id == id); if (row) row[field] = value; renderDashboard(); }, 500); }; })();
+  document.querySelectorAll(".bh-name").forEach(el => el.addEventListener("input", () => debounced(el.dataset.id, "name", el.value)));
+  document.querySelectorAll(".bh-amount").forEach(el => el.addEventListener("input", () => debounced(el.dataset.id, "sanctioned_amount", Number(el.value) || 0)));
+  document.querySelectorAll(".bh-delete").forEach(el => el.addEventListener("click", async () => {
+    if (!confirm("Delete this budget head? Any expenses/items under it must be removed first.")) return;
+    const { error } = await sb.from("budget_heads").delete().eq("id", el.dataset.id);
+    if (error) { alert("Can't delete: " + error.message); return; }
+    loadBudgetHeads(); renderDashboard();
+  }));
+}
+
+document.getElementById("budget-head-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("bh-name").value.trim();
+  const amount = Number(document.getElementById("bh-amount").value);
+  const { error } = await sb.from("budget_heads").insert({ name, sanctioned_amount: amount });
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  loadBudgetHeads(); renderDashboard();
+});
 
 async function renderDashboard() {
   const { data: expenses, error } = await sb.from("expenses").select("budget_head_id, amount, status");
@@ -579,15 +633,26 @@ function getVisibleProcurementRows() {
   return rows;
 }
 
+function lineTotal(item) {
+  const qty = Number(item.quantity || 1);
+  const unit = item.actual_price != null ? Number(item.actual_price) : Number(item.approx_price || 0);
+  return qty * unit;
+}
+
 function recalcProcurementTotals() {
-  let approxTotal = 0, actualTotal = 0;
+  let approxTotal = 0, actualTotal = 0, lineTotalSum = 0;
   document.querySelectorAll("#procurement-tbody tr").forEach(tr => {
-    approxTotal += Number(tr.dataset.approx || 0);
+    const qty = Number(tr.querySelector(".proc-qty")?.value || 1);
+    const approx = Number(tr.querySelector(".proc-approx")?.value || 0);
     const actualInput = tr.querySelector(".proc-actual");
-    actualTotal += Number(actualInput?.value || 0);
+    const actual = actualInput?.value ? Number(actualInput.value) : null;
+    approxTotal += approx * qty;
+    actualTotal += (actual ?? 0) * qty;
+    lineTotalSum += (actual != null ? actual : approx) * qty;
   });
   document.getElementById("procurement-approx-total").textContent = fmtRs(approxTotal);
   document.getElementById("procurement-actual-total").textContent = fmtRs(actualTotal);
+  document.getElementById("procurement-line-total").textContent = fmtRs(lineTotalSum);
 }
 
 function renderProcurement() {
@@ -598,12 +663,16 @@ function renderProcurement() {
   document.getElementById("procurement-progress").textContent = `${delivered} / ${procurementCache.length} delivered`;
   document.getElementById("procurement-progress-bar").style.width = procurementCache.length ? `${(delivered / procurementCache.length) * 100}%` : "0%";
 
-  document.getElementById("procurement-tbody").innerHTML = rows.map(item => `
-    <tr data-id="${item.id}" data-approx="${Number(item.approx_price || 0)}" ${canReorder ? 'draggable="true"' : ""}>
+  document.getElementById("procurement-tbody").innerHTML = rows.map(item => {
+    const headOptionsForItem = budgetHeadsCache.map(h => `<option value="${h.id}" ${h.id === item.budget_head_id ? "selected" : ""}>${escapeHtml(h.name)}</option>`).join("");
+    return `<tr data-id="${item.id}" ${canReorder ? 'draggable="true"' : ""}>
       <td class="text-slate-300 ${canReorder ? "cursor-move" : "opacity-30"}" title="${canReorder ? "Drag to reorder" : "Reordering disabled while filtered/sorted"}">☰</td>
-      <td class="text-xs text-slate-500">${escapeHtml(item.budget_heads?.name || "")}</td>
-      <td>${escapeHtml(item.item_name)}</td><td>${fmtRs(item.approx_price)}</td>
+      <td><select class="proc-head text-xs w-32" data-id="${item.id}">${headOptionsForItem}</select></td>
+      <td><input type="text" class="proc-name w-40" data-id="${item.id}" value="${escapeHtml(item.item_name)}"></td>
+      <td><input type="number" min="1" step="1" class="proc-qty w-16" data-id="${item.id}" value="${item.quantity ?? 1}"></td>
+      <td><input type="number" step="0.01" class="proc-approx w-24" data-id="${item.id}" value="${item.approx_price ?? ""}" placeholder="—"></td>
       <td><input type="number" step="0.01" class="proc-actual w-24" data-id="${item.id}" value="${item.actual_price ?? ""}" placeholder="—"></td>
+      <td class="proc-line-total font-semibold whitespace-nowrap">${fmtRs(lineTotal(item))}</td>
       <td><input type="text" class="proc-vendor w-28" data-id="${item.id}" value="${escapeHtml(item.vendor || "")}" placeholder="—"></td>
       <td><select class="proc-status text-xs" data-id="${item.id}">
             <option value="pending" ${item.status === "pending" ? "selected" : ""}>Pending</option>
@@ -611,23 +680,54 @@ function renderProcurement() {
             <option value="delivered" ${item.status === "delivered" ? "selected" : ""}>Delivered</option>
           </select></td>
       <td><input type="text" class="proc-notes w-32" data-id="${item.id}" value="${escapeHtml(item.notes || "")}" placeholder="—"></td>
-    </tr>`).join("");
+      <td><button class="proc-delete text-red-500 text-xs hover:underline" data-id="${item.id}">Delete</button></td>
+    </tr>`;
+  }).join("");
 
   recalcProcurementTotals();
 
-  // Status change: small change, worth a full reload since it affects the progress bar.
+  function updateLineTotalCell(id) {
+    const row = procurementCache.find(r => r.id == id);
+    const tr = document.querySelector(`#procurement-tbody tr[data-id="${id}"]`);
+    if (row && tr) tr.querySelector(".proc-line-total").textContent = fmtRs(lineTotal(row));
+    recalcProcurementTotals();
+  }
+
+  // Dropdowns: worth a full reload since they can affect grouping/progress.
   document.querySelectorAll(".proc-status").forEach(el => el.addEventListener("change", async () => {
     await sb.from("procurement_items").update({ status: el.value }).eq("id", el.dataset.id);
     const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.status = el.value;
     loadProcurement();
   }));
+  document.querySelectorAll(".proc-head").forEach(el => el.addEventListener("change", async () => {
+    await sb.from("procurement_items").update({ budget_head_id: Number(el.value) }).eq("id", el.dataset.id);
+    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.budget_head_id = Number(el.value);
+    loadProcurement();
+  }));
 
-  // Text/number fields: save in the background only, never re-render the table
-  // while typing (that was what made editing feel broken before).
+  // Text/number fields: save quietly in the background only — never rebuild the
+  // table while typing, that's what made editing feel broken before.
+  document.querySelectorAll(".proc-name").forEach(el => el.addEventListener("input", () => {
+    procDebouncedUpdate(el.dataset.id, "item_name", el.value);
+    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.item_name = el.value;
+  }));
+  document.querySelectorAll(".proc-qty").forEach(el => el.addEventListener("input", () => {
+    const qty = el.value ? Number(el.value) : 1;
+    procDebouncedUpdate(el.dataset.id, "quantity", qty);
+    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.quantity = qty;
+    updateLineTotalCell(el.dataset.id);
+  }));
+  document.querySelectorAll(".proc-approx").forEach(el => el.addEventListener("input", () => {
+    const val = el.value ? Number(el.value) : null;
+    procDebouncedUpdate(el.dataset.id, "approx_price", val);
+    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.approx_price = val;
+    updateLineTotalCell(el.dataset.id);
+  }));
   document.querySelectorAll(".proc-actual").forEach(el => el.addEventListener("input", () => {
-    procDebouncedUpdate(el.dataset.id, "actual_price", el.value ? Number(el.value) : null);
-    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.actual_price = el.value ? Number(el.value) : null;
-    recalcProcurementTotals();
+    const val = el.value ? Number(el.value) : null;
+    procDebouncedUpdate(el.dataset.id, "actual_price", val);
+    const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.actual_price = val;
+    updateLineTotalCell(el.dataset.id);
   }));
   document.querySelectorAll(".proc-vendor").forEach(el => el.addEventListener("input", () => {
     procDebouncedUpdate(el.dataset.id, "vendor", el.value);
@@ -637,9 +737,29 @@ function renderProcurement() {
     procDebouncedUpdate(el.dataset.id, "notes", el.value);
     const row = procurementCache.find(r => r.id == el.dataset.id); if (row) row.notes = el.value;
   }));
+  document.querySelectorAll(".proc-delete").forEach(el => el.addEventListener("click", async () => {
+    if (!confirm("Delete this procurement item?")) return;
+    await sb.from("procurement_items").delete().eq("id", el.dataset.id);
+    loadProcurement();
+  }));
 
   if (canReorder) attachProcurementDragHandlers();
 }
+
+document.getElementById("proc-add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    budget_head_id: Number(document.getElementById("proc-add-head").value),
+    item_name: document.getElementById("proc-add-name").value,
+    quantity: Number(document.getElementById("proc-add-qty").value) || 1,
+    approx_price: document.getElementById("proc-add-approx").value ? Number(document.getElementById("proc-add-approx").value) : null,
+  };
+  const { error } = await sb.from("procurement_items").insert(payload);
+  if (error) { alert("Error: " + error.message); return; }
+  e.target.reset();
+  document.getElementById("proc-add-qty").value = 1;
+  loadProcurement();
+});
 
 function attachProcurementDragHandlers() {
   const tbody = document.getElementById("procurement-tbody");
